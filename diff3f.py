@@ -3,7 +3,7 @@ from PIL import Image
 from torchvision.utils import make_grid
 import numpy as np
 from diffusion import add_texture_to_render
-from dino import get_dino_features
+from dino import get_dino_features, get_sam_features
 from render import batch_render
 from pytorch3d.ops import ball_query
 from tqdm import tqdm
@@ -11,7 +11,7 @@ from time import time
 import random
 
 
-FEATURE_DIMS = 1280+768 # diffusion unet + dino
+FEATURE_DIMS = 1280+768 # diffusion unet + dino; for sam 1280+256
 VERTEX_GPU_LIMIT = 35000
 
 
@@ -75,6 +75,7 @@ def get_features_per_vertex(
     return_image=True,
     bq=True,
     prompts_list=None,
+    use_sam=False
 ):
     t1 = time()
     if mesh_vertices is None:
@@ -98,7 +99,8 @@ def get_features_per_vertex(
     camera = camera.cpu()
     normal_map_input = None
     depth = depth.cpu()
-    torch.cuda.empty_cache()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     ft_per_vertex = torch.zeros((len(mesh_vertices), FEATURE_DIMS)).half()  # .to(device)
     ft_per_vertex_count = torch.zeros((len(mesh_vertices), 1)).half()  # .to(device)
     for idx in tqdm(range(len(batched_renderings))):
@@ -129,8 +131,10 @@ def get_features_per_vertex(
             num_images_per_prompt=num_images_per_prompt,
             return_image=return_image
         )
-        aligned_dino_features = get_dino_features(device, dino_model, diffusion_output[1][0], grid)
-        aligned_features = None
+        if not use_sam:
+            aligned_dino_features = get_dino_features(device, dino_model, diffusion_output[1][0], grid)
+        else:
+            aligned_dino_features = get_sam_features(device, dino_model, diffusion_output[1][0], grid)
         with torch.no_grad():
             ft = torch.nn.Upsample(size=(H,W), mode="bilinear")(diffusion_output[0].unsqueeze(0)).to(device)
             ft_dim = ft.size(1)
