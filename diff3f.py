@@ -11,7 +11,8 @@ from time import time
 import random
 
 
-FEATURE_DIMS = 1280+768 # diffusion unet + dino; for sam 1280+256
+FEATURE_DIMS_DINO = 1280+768
+FEATURE_DIMS_SAM = 1280+256
 VERTEX_GPU_LIMIT = 35000
 
 
@@ -101,7 +102,10 @@ def get_features_per_vertex(
     depth = depth.cpu()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-    ft_per_vertex = torch.zeros((len(mesh_vertices), FEATURE_DIMS)).half()  # .to(device)
+    if not use_sam:
+        ft_per_vertex = torch.zeros((len(mesh_vertices), FEATURE_DIMS_DINO)).half()  # .to(device)
+    else:
+        ft_per_vertex = torch.zeros((len(mesh_vertices), FEATURE_DIMS_SAM)).half()  # .to(device)
     ft_per_vertex_count = torch.zeros((len(mesh_vertices), 1)).half()  # .to(device)
     for idx in tqdm(range(len(batched_renderings))):
         dp = depth[idx].flatten().unsqueeze(1)

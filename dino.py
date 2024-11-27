@@ -57,6 +57,7 @@ def get_sam_features(device, sam_model, img, grid):
     h, w = features.shape[2], features.shape[3]  # Get spatial dimensions directly from features
     dim = features.shape[1]  # Feature dimension is in channel position
     features = features.reshape(-1, h, w, dim).permute(0, 3, 1, 2)
+    features = features.half()
     features = torch.nn.functional.grid_sample(
         features, grid, align_corners=False
     ).reshape(1, dim, -1)
