@@ -52,6 +52,7 @@ def get_sam_features(device, sam_model, img, grid):
     predictor.set_image(img)
     # Get features from the specified intermediate layer
     features = predictor._features["image_embed"]
+    # features = predictor._features["high_res_feats"][0]
     
     # Process features similar to DINO
     h, w = features.shape[2], features.shape[3]  # Get spatial dimensions directly from features
