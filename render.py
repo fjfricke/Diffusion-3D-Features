@@ -1,70 +1,104 @@
-from pytorch3d.renderer.cameras import look_at_view_transform, PerspectiveCameras
-from pytorch3d.renderer.mesh.rasterizer import RasterizationSettings, MeshRasterizer
-from pytorch3d.renderer.mesh.shader import HardPhongShader
-from pytorch3d.renderer import MeshRenderer
-from pytorch3d.renderer.lighting import PointLights
-from normal_shading import HardPhongNormalShader
-import torch
-import math
-import time
-
-
 @torch.no_grad()
-def run_rendering(device, mesh, mesh_vertices, num_views, H, W, add_angle_azi=0, add_angle_ele=0, use_normal_map=False):
+def run_rendering(device, mesh, mesh_vertices, num_views, H, W, use_normal_map=False, fixed_angle=None):
+    """
+    Render object from multiple viewpoints in a continuous sequence
+    Args:
+        ...existing args...
+        fixed_angle: dict with 'type' ('azimuth' or 'elevation') and 'value' (angle in degrees)
+    """
+    # Calculate bounding box and center
     bbox = mesh.get_bounding_boxes()
     bbox_min = bbox.min(dim=-1).values[0]
     bbox_max = bbox.max(dim=-1).values[0]
-    bb_diff = bbox_max - bbox_min
     bbox_center = (bbox_min + bbox_max) / 2.0
+    
+    # Calculate viewing distance based on object size
+    bb_diff = bbox_max - bbox_min
     scaling_factor = 0.65
-    distance = torch.sqrt((bb_diff * bb_diff).sum())
-    distance *= scaling_factor
-    steps = int(math.sqrt(num_views))
-    end = 360 - 360/steps
-    elevation = torch.linspace(start = 0 , end = end , steps = steps).repeat(steps) + add_angle_ele
-    azimuth = torch.linspace(start = 0 , end = end , steps = steps)
-    azimuth = torch.repeat_interleave(azimuth, steps) + add_angle_azi
-    bbox_center = bbox_center.unsqueeze(0)
+    distance = torch.sqrt((bb_diff * bb_diff).sum()) * scaling_factor
+    
+    # Calculate angles based on fixed_angle parameter
+    angle_step = 360.0 / num_views
+    
+    if fixed_angle is None or fixed_angle['type'] == 'elevation':
+        # Vary azimuth, fix elevation
+        azimuth = torch.linspace(0, 360 - angle_step, num_views)
+        elevation = torch.full_like(azimuth, fixed_angle['value'] if fixed_angle else 0.0)
+    else:  # fixed_angle['type'] == 'azimuth'
+        # Create a continuous elevation path that goes up one side and down the other
+        fixed_azi = float(fixed_angle['value'])
+        half_views = num_views // 2
+        
+        # Generate elevation angles: 0 -> 180 -> 0
+        elevation_up = torch.linspace(0, 180, half_views)
+        elevation_down = torch.linspace(180, 0, num_views - half_views)
+        elevation = torch.cat([elevation_up, elevation_down[1:]])  # Remove duplicate at 180
+        
+        # Create azimuth tensor with same size as elevation
+        azimuth = torch.ones(num_views, device=device) * fixed_azi
+        # Flip azimuth for second half
+        azimuth[half_views:] += 180.0
+    
+    # Move everything to device and ensure shapes are correct
+    azimuth = azimuth.to(device)
+    elevation = elevation.to(device)
+    distances = torch.full_like(azimuth, distance)
+    
+    # Ensure bbox_center is correctly broadcast for each view
+    bbox_center = bbox_center.unsqueeze(0).expand(num_views, -1)
+    
+    # Prepare camera transform
     rotation, translation = look_at_view_transform(
-        dist=distance, azim=azimuth, elev=elevation, device=device, at=bbox_center
-    )
-    camera = PerspectiveCameras(R=rotation, T=translation, device=device)
-    rasterization_settings = RasterizationSettings(
-        image_size=(H, W), blur_radius=0.0, faces_per_pixel=1, bin_size=0
-    )
-    rasterizer = MeshRasterizer(cameras=camera, raster_settings=rasterization_settings)
-    camera_centre = camera.get_camera_center()
-    lights = PointLights(
-        diffuse_color=((0.4, 0.4, 0.5),),
-        ambient_color=((0.6, 0.6, 0.6),),
-        specular_color=((0.01, 0.01, 0.01),),
-        location=camera_centre,
+        dist=distances,  # Now using per-view distances
+        azim=azimuth,
+        elev=elevation,
         device=device,
+        at=bbox_center  # Now properly broadcast
     )
-    shader = HardPhongShader(device=device, cameras=camera, lights=lights)
-    batch_renderer = MeshRenderer(rasterizer=rasterizer, shader=shader)
+
+    # Setup camera with batch size
+    cameras = PerspectiveCameras(
+        R=rotation,
+        T=translation,
+        device=device
+    )
+    
+    # Setup rasterizer
+    raster_settings = RasterizationSettings(
+        image_size=(H, W),
+        blur_radius=0.0,
+        faces_per_pixel=1,
+        bin_size=0
+    )
+    rasterizer = MeshRasterizer(cameras=cameras, raster_settings=raster_settings)
+    
+    # Setup lighting - ensure it's properly batched
+    camera_center = cameras.get_camera_center()  # This should now be [num_views, 3]
+    lights = PointLights(
+        diffuse_color=torch.full((num_views, 3), 0.4, device=device),
+        ambient_color=torch.full((num_views, 3), 0.6, device=device),
+        specular_color=torch.full((num_views, 3), 0.01, device=device),
+        location=camera_center,
+        device=device
+    )
+    
+    # Setup renderer
+    shader = HardPhongShader(device=device, cameras=cameras, lights=lights)
+    renderer = MeshRenderer(rasterizer=rasterizer, shader=shader)
+    
+    # Render from multiple views
     batch_mesh = mesh.extend(num_views)
-    normal_batched_renderings = None
-    batched_renderings = batch_renderer(batch_mesh)
+    renderings = renderer(batch_mesh)
+    
+    # Handle normal map rendering if requested
+    normal_renderings = None
     if use_normal_map:
-        normal_shader = HardPhongNormalShader(device=device, cameras=camera, lights=lights)
-        normal_batch_renderer = MeshRenderer(rasterizer=rasterizer, shader=normal_shader)
-        normal_batched_renderings = normal_batch_renderer(batch_mesh)
+        normal_shader = HardPhongNormalShader(device=device, cameras=cameras, lights=lights)
+        normal_renderer = MeshRenderer(rasterizer=rasterizer, shader=normal_shader)
+        normal_renderings = normal_renderer(batch_mesh)
+    
+    # Get depth information
     fragments = rasterizer(batch_mesh)
     depth = fragments.zbuf
-    return batched_renderings, normal_batched_renderings, camera, depth
-
-
-def batch_render(device, mesh, mesh_vertices, num_views, H, W, use_normal_map=False):
-    trials = 0
-    add_angle_azi = 0
-    add_angle_ele = 0
-    while trials < 5:
-        try:
-            return run_rendering(device, mesh, mesh_vertices, num_views, H, W, add_angle_azi=add_angle_azi, add_angle_ele=add_angle_ele, use_normal_map=use_normal_map)
-        except torch.linalg.LinAlgError as e:
-            trials += 1
-            print("lin alg exception at rendering, retrying ", trials)
-            add_angle_azi = torch.randn(1)
-            add_angle_ele = torch.randn(1)
-            continue
+    
+    return renderings, normal_renderings, cameras, depth
