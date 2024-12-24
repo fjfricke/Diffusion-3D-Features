@@ -22,7 +22,7 @@ class MeshVideoGenerator:
         # Get all files in the folder
         files = sorted(os.listdir(folder))
         # Filter only the files you want
-        valid_extensions = {".obj", ".off"}
+        valid_extensions = {".obj", ".off", ".ply"}
         files = [f for f in files if os.path.splitext(f)[1].lower() in valid_extensions]
         
         # Check if the index is valid
@@ -92,6 +92,7 @@ class MeshVideoGenerator:
             
         out.release()
         print(f"Video saved to {output_path}")
+        print()
 
     def process_single_mesh(self, folder, index, display_frames=False):
         try:
