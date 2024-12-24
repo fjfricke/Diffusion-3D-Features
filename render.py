@@ -192,7 +192,6 @@ def batch_render(device, mesh, num_views, H, W, use_normal_map=False, fixed_angl
     """
     try:
         print(f"Starting batch_render with num_views={num_views}, H={H}, W={W}")
-        print(f"Fixed angle settings: {fixed_angle}")
         
         # Validate mesh
         if mesh.verts_packed().shape[0] == 0:
