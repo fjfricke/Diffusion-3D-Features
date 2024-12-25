@@ -70,15 +70,18 @@ def compute_camera_transform_fixed_elevation(device, num_views, bbox_center, dis
     )
     return rotation, translation
 
+@torch.no_grad()
 def compute_camera_transform_fixed_azimuth(device, num_views, bbox_center, distance, fixed_angle):
     """
     Compute camera transforms for a vertical circular path around an object,
-    with consistent orientation throughout the path.
+    with improved stability for large number of views.
     """
     fixed_azimuth = float(fixed_angle['value']) if fixed_angle else 0.0
     
     # Generate elevation angles (going from 0 to 360 degrees)
-    elevation = torch.linspace(0, 360, num_views + 1)[:-1].to(device)
+    # Add small epsilon to avoid exact 90/270 degree angles which can cause singularities
+    epsilon = 0.001
+    elevation = torch.linspace(epsilon, 360 - epsilon, num_views).to(device)
     elevation_rad = elevation * (math.pi / 180.0)
     azimuth_rad = torch.tensor(fixed_azimuth * (math.pi / 180.0), device=device)
 
@@ -89,32 +92,34 @@ def compute_camera_transform_fixed_azimuth(device, num_views, bbox_center, dista
     
     # Stack and normalize camera positions
     camera_directions = torch.stack([x, y, z], dim=-1)
-    camera_directions = camera_directions / torch.norm(camera_directions, dim=-1, keepdim=True)
+    camera_directions = camera_directions / (torch.norm(camera_directions, dim=-1, keepdim=True) + 1e-8)
     
     # Scale by distance to get actual camera positions
     camera_positions = bbox_center.unsqueeze(0) + (camera_directions * distance)
     
     up_vectors = []
-    flip_flags = []  # Track which views need to be flipped
+    flip_flags = []
     
-    # Calculate view directions
+    # Calculate view directions with added stability
     view_dirs = bbox_center.unsqueeze(0) - camera_positions
-    view_dirs = view_dirs / torch.norm(view_dirs, dim=-1, keepdim=True)
+    view_dirs = view_dirs / (torch.norm(view_dirs, dim=-1, keepdim=True) + 1e-8)
     
     for i in range(num_views):
         current_elevation = elevation[i].item()
         view_dir = view_dirs[i]
         
-        # Base up vector
+        # Avoid exact vertical orientations
+        if abs(current_elevation - 90) < 1 or abs(current_elevation - 270) < 1:
+            current_elevation += epsilon
+            
         if current_elevation < 90 or current_elevation >= 270:
             up = torch.tensor([0., 1., 0.], device=device)
             flip_flags.append(False)
         else:
-            # Between 90 and 270 degrees, maintain visual consistency by flipping later
             up = torch.tensor([0., 1., 0.], device=device)
             flip_flags.append(True)
         
-        # Ensure up vector is perpendicular to view direction
+        # Add stability to cross products
         right = torch.cross(view_dir, up)
         right = right / (torch.norm(right) + 1e-8)
         up = torch.cross(right, view_dir)
@@ -122,10 +127,12 @@ def compute_camera_transform_fixed_azimuth(device, num_views, bbox_center, dista
         
         up_vectors.append(up.unsqueeze(0))
     
-    # Stack all up vectors
     up = torch.cat(up_vectors, dim=0)
     
-    # Calculate camera rotation and translation
+    # Add checks for invalid transforms
+    if torch.any(torch.isnan(camera_positions)) or torch.any(torch.isnan(up)):
+        raise ValueError("Invalid camera transforms detected")
+        
     rotation, translation = look_at_view_transform(
         eye=camera_positions,
         at=bbox_center.expand(num_views, -1),
@@ -134,6 +141,7 @@ def compute_camera_transform_fixed_azimuth(device, num_views, bbox_center, dista
     )
     
     return rotation, translation, camera_positions, flip_flags
+
 
 @torch.no_grad()
 def run_rendering(device, mesh, num_views, H, W, use_normal_map=False, fixed_angle=None):
@@ -197,7 +205,16 @@ def batch_render(device, mesh, num_views, H, W, use_normal_map=False, fixed_angl
         if mesh.verts_packed().shape[0] == 0:
             raise ValueError("Mesh has no vertices")
             
-        # Validate camera parameters
+        # Add validation for mesh scale and center
+        verts = mesh.verts_packed()
+        if torch.any(torch.isnan(verts)):
+            raise ValueError("Mesh contains NaN vertices")
+            
+        # Check for degenerate mesh
+        if torch.any(torch.std(verts, dim=0) < 1e-6):
+            raise ValueError("Mesh appears to be degenerate (flat in one or more dimensions)")
+            
+        # Run rendering with validated parameters
         result = run_rendering(device, mesh, num_views, H, W, use_normal_map, fixed_angle)
         
         # Validate results
