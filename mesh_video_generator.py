@@ -3,7 +3,6 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-from diff3f import batch_render
 from utils import convert_mesh_container_to_torch_mesh
 from dataloaders.mesh_container import MeshContainer
 
@@ -15,7 +14,6 @@ class MeshVideoGenerator:
         self.use_normal_map = use_normal_map
         self.device = device
         
-        # Create output directory if it doesn't exist
         os.makedirs(output_dir, exist_ok=True)
     
     def load_mesh_by_index(self, folder, index):
@@ -37,8 +35,39 @@ class MeshVideoGenerator:
         # Load the mesh
         mesh = MeshContainer().load_from_file(file_path)
         return mesh, file_to_load
-
+    
+    def render_mesh_with_depth(self, mesh):
+        torch_mesh = convert_mesh_container_to_torch_mesh(mesh, device=self.device, is_tosca=False)
+        
+        # Get both rotations with depth
+        azimuth_data = batch_render(
+            device=self.device,
+            mesh=torch_mesh,
+            num_views=self.num_views,
+            H=self.hw,
+            W=self.hw,
+            fixed_angle={'type': 'elevation', 'value': 0}
+        )
+        
+        elevation_data = batch_render(
+            device=self.device,
+            mesh=torch_mesh,
+            num_views=self.num_views,
+            H=self.hw,
+            W=self.hw,
+            fixed_angle={'type': 'azimuth', 'value': 0}
+        )
+        
+        # Combine renders, depths and cameras
+        renders = torch.cat([azimuth_data[0], elevation_data[0]], dim=0)
+        depths = torch.cat([azimuth_data[3], elevation_data[3]], dim=0)
+        cameras = torch.cat([azimuth_data[2], elevation_data[2]], dim=0)
+        
+        return renders, depths, cameras
+    
     def render_mesh(self, mesh):
+        from diff3f import batch_render
+
         # Convert mesh to torch format
         torch_mesh = convert_mesh_container_to_torch_mesh(mesh, device=self.device, is_tosca=False)
         
