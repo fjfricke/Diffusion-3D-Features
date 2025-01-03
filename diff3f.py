@@ -1,13 +1,13 @@
 import torch
 from PIL import Image
 import numpy as np
+from diffusion import add_texture_to_render
+from sam2_setup import get_sam_features
+from pytorch3d.ops import ball_query
+from mesh_video_generator import MeshVideoGenerator
 from tqdm import tqdm
 from time import time
 import random
-from pytorch3d.ops import ball_query
-from mesh_video_generator import MeshVideoGenerator
-from sam2_setup import get_sam_features
-from diffusion import add_texture_to_render
 
 
 SAM_FEATURE_DIMS = 256
@@ -62,19 +62,18 @@ def get_features_per_vertex(
     sam_model,
     pipe,
     mesh,
-    prompt,  # Kept for compatibility, though not used with SAM2
+    prompt,
     num_views=100,
     H=512,
     W=512,
-    use_latent=False,
     tolerance=0.01,
+    use_latent=False,
+    use_normal_map=True,
     num_images_per_prompt=1,
     mesh_vertices=None,
     return_image=True,
     bq=True,
     prompts_list=None,
-    use_normal_map=True,
-
 ):
     """Main function to extract and map features to mesh vertices."""
     t1 = time()
@@ -84,9 +83,7 @@ def get_features_per_vertex(
     # Calculate distances for ball query radius
     if len(mesh_vertices) > VERTEX_GPU_LIMIT:
         samples = random.sample(range(len(mesh_vertices)), 10000)
-        maximal_distance = torch.cdist(
-            mesh_vertices[samples], mesh_vertices[samples]
-        ).max()
+        maximal_distance = torch.cdist(mesh_vertices[samples], mesh_vertices[samples]).max()
     else:
         maximal_distance = torch.cdist(mesh_vertices, mesh_vertices).max()  # .cpu()
 
@@ -95,8 +92,10 @@ def get_features_per_vertex(
     # Initialize video generator and get renders
     video_gen = MeshVideoGenerator(hw=H, num_views=num_views, device=device)
     batched_renderings, normal_batched_renderings, camera, depth = video_gen.render_mesh_with_depth(mesh)
-    
-
+    print("batched_renderings shape: ", batched_renderings.shape)
+    print("normal_batched_renderings shape: ", normal_batched_renderings.shape)
+    print("camera shape: ", camera.shape)
+    print("depth shape: ", depth.shape)
     if use_normal_map:
         normal_batched_renderings = normal_batched_renderings.cpu()
     batched_renderings = batched_renderings.cpu()
@@ -105,12 +104,7 @@ def get_features_per_vertex(
     # Setup pixel coordinates and grid
     pixel_coords = arange_pixels((H, W), invert_y_axis=True)[0]
     pixel_coords[:, 0] = torch.flip(pixel_coords[:, 0], dims=[0])
-    grid = (
-        arange_pixels((H, W), invert_y_axis=False)[0]
-        .to(device)
-        .reshape(1, H, W, 2)
-        .half()
-    )
+    grid = arange_pixels((H, W), invert_y_axis=False)[0].to(device).reshape(1, H, W, 2).half()
 
     camera = camera.cpu()
     normal_map_input = None
@@ -130,7 +124,6 @@ def get_features_per_vertex(
         xy_depth = torch.cat((pixel_coords, dp), dim=1)
         indices = xy_depth[:, 2] != -1
         xy_depth = xy_depth[indices]
-
         world_coords = (
             camera[idx].unproject_points(
                 xy_depth, world_coordinates=True, from_ndc=True
@@ -138,10 +131,9 @@ def get_features_per_vertex(
         ).to(device)
         
         # Process frame and map features
-
         diffusion_input_img = (
-                batched_renderings[idx, :, :, :3].cpu().numpy() * 255
-            ).astype(np.uint8)
+            batched_renderings[idx, :, :, :3].cpu().numpy() * 255
+        ).astype(np.uint8)
         
         if use_normal_map:
             normal_map_input = normal_batched_renderings[idx]
@@ -150,7 +142,6 @@ def get_features_per_vertex(
             prompt = random.choice(prompts_list)
 
 
-        """ 
         diffusion_output = add_texture_to_render(
             pipe,
             diffusion_input_img,
@@ -160,25 +151,21 @@ def get_features_per_vertex(
             use_latent=use_latent,
             num_images_per_prompt=num_images_per_prompt,
             return_image=return_image
-        ) """
-        
-        
-        aligned_dino_features = get_sam_features(device, sam_model, diffusion_input_img, grid)
+        )
 
-        """ with torch.no_grad():
+        aligned_dino_features = get_sam_features(device, sam_model, diffusion_input_img, grid)
+        aligned_features = None
+
+        with torch.no_grad():
             ft = torch.nn.Upsample(size=(H,W), mode="bilinear")(diffusion_output[0].unsqueeze(0)).to(device)
             ft_dim = ft.size(1)
             aligned_features = torch.nn.functional.grid_sample(
                 ft, grid, align_corners=False
             ).reshape(1, ft_dim, -1)
-            aligned_features = torch.nn.fu nctional.normalize(aligned_features, dim=1)"""
+            aligned_features = torch.nn.functional.normalize(aligned_features, dim=1)
         # this is feature per pixel in the grid
-        
         aligned_features = aligned_dino_features
-
         features_per_pixel = aligned_features[0, :, indices].cpu()
-
-
         # map pixel to vertex on mesh
         if bq:
             queried_indices = (

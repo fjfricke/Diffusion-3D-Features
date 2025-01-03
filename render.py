@@ -8,7 +8,7 @@ import torch
 import math
 
 @torch.no_grad()
-def calculate_bbox_and_distance(mesh, scaling_factor=2.0):
+def calculate_bbox_and_distance(mesh):
     """
     Calculate bounding box center and appropriate camera distance.
     Added safeguards for distance calculation.
@@ -17,6 +17,7 @@ def calculate_bbox_and_distance(mesh, scaling_factor=2.0):
     bbox_min = bbox.min(dim=-1).values[0]
     bbox_max = bbox.max(dim=-1).values[0]
     bbox_center = (bbox_min + bbox_max) / 2.0
+    scaling_factor = 0.8
     
     # Calculate diagonal length of bounding box
     bb_diff = bbox_max - bbox_min
@@ -56,11 +57,6 @@ def setup_rasterizer_and_lights(device, camera, image_size, camera_positions=Non
 
 @torch.no_grad()
 def compute_camera_transform_fixed_elevation(device, num_views, bbox_center, distance, fixed_angle):
-    """ angle_step = 360.0 / num_views
-    azimuth = torch.linspace(0, 360 - angle_step, num_views).to(device)
-    elevation = torch.full_like(azimuth, fixed_angle['value']).to(device)
-    #elevation = torch.full_like(azimuth, fixed_angle['value'] if fixed_angle else 0.0).to(device)
- """
     angle_step = 360.0 / num_views
     azimuth = torch.linspace(0, 360 - angle_step, num_views).to(device)
     elevation = torch.full_like(azimuth, fixed_angle['value'] if fixed_angle else 0.0).to(device)
@@ -150,8 +146,7 @@ def compute_camera_transform_fixed_azimuth(device, num_views, bbox_center, dista
 
 @torch.no_grad()
 def run_rendering(device, mesh, num_views, H, W, use_normal_map=False, fixed_angle=None):
-    scaling_factor = 0.8
-    bbox_center, distance = calculate_bbox_and_distance(mesh, scaling_factor)
+    bbox_center, distance = calculate_bbox_and_distance(mesh)
 
     if fixed_angle and fixed_angle['type'] == 'elevation':
         rotation, translation = compute_camera_transform_fixed_elevation(
