@@ -94,7 +94,8 @@ def get_features_per_vertex(
     batched_renderings, normal_batched_renderings, camera, depth = video_gen.render_mesh_with_depth(mesh)
     print("batched_renderings shape: ", batched_renderings.shape)
     print("normal_batched_renderings shape: ", normal_batched_renderings.shape)
-    print("camera shape: ", camera.shape)
+    print("camera R:", camera.R) 
+    print("camera T:", camera.T) 
     print("depth shape: ", depth.shape)
     if use_normal_map:
         normal_batched_renderings = normal_batched_renderings.cpu()
