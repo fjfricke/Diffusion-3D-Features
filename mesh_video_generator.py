@@ -40,7 +40,7 @@ class MeshVideoGenerator:
         return mesh, file_to_load
     
     def render_mesh_with_depth(self, mesh):
-        # torch_mesh = convert_mesh_container_to_torch_mesh(mesh, device=self.device, is_tosca=False)
+        #torch_mesh = convert_mesh_container_to_torch_mesh(mesh, device=self.device, is_tosca=False)
         torch_mesh = mesh
         
         # Get both rotations with depth
@@ -66,18 +66,20 @@ class MeshVideoGenerator:
             fixed_angle={'type': 'azimuth', 'value': 0}
         )
         
+
+
         try:
-            combined_renderings = torch.cat([elevation_renderings, azimuth_renderings], dim=0)
-            combined_depth = torch.cat([elevation_depth, azimuth_depth], dim=0)
+            combined_renderings = torch.cat([azimuth_renderings, elevation_renderings], dim=0)
+            combined_depth = torch.cat([azimuth_depth, elevation_depth], dim=0)
             
             if self.use_normal_map and elevation_normals is not None and azimuth_normals is not None:
-                combined_normals = torch.cat([elevation_normals, azimuth_normals], dim=0)
+                combined_normals = torch.cat([azimuth_normals, elevation_normals], dim=0)
             else:
                 combined_normals = None
                 
             # Concatenate cameras by combining their R and T matrices
-            R = torch.cat([elevation_camera.R, azimuth_camera.R], dim=0)
-            T = torch.cat([elevation_camera.T, azimuth_camera.T], dim=0)
+            R = torch.cat([azimuth_camera.R, elevation_camera.R], dim=0)
+            T = torch.cat([azimuth_camera.T, elevation_camera.T], dim=0)
             
             # Create new combined camera
             combined_camera = PerspectiveCameras(
@@ -95,11 +97,10 @@ class MeshVideoGenerator:
             return None, None, None, None
     
     def render_mesh(self, mesh):
-        from diff3f import batch_render
 
         # Convert mesh to torch format
-        torch_mesh = convert_mesh_container_to_torch_mesh(mesh, device=self.device, is_tosca=False)
-        
+        #torch_mesh = convert_mesh_container_to_torch_mesh(mesh, device=self.device, is_tosca=False)
+        torch_mesh = mesh
         # Render azimuth rotation
         azimuth_renders, normal_azimuth, camera, depth = batch_render(
             device=self.device,

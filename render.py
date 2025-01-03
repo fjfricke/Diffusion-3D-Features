@@ -61,11 +61,9 @@ def compute_camera_transform_fixed_elevation(device, num_views, bbox_center, dis
     elevation = torch.full_like(azimuth, fixed_angle['value']).to(device)
     #elevation = torch.full_like(azimuth, fixed_angle['value'] if fixed_angle else 0.0).to(device)
  """
-    steps = int(math.sqrt(num_views))
-    end = 360 - 360/steps
-    elevation = torch.linspace(start=0, end=end, steps=steps).repeat(steps)
-    azimuth = torch.linspace(start=0, end=end, steps=steps)
-    azimuth = torch.repeat_interleave(azimuth, steps)
+    angle_step = 360.0 / num_views
+    azimuth = torch.linspace(0, 360 - angle_step, num_views).to(device)
+    elevation = torch.full_like(azimuth, fixed_angle['value'] if fixed_angle else 0.0).to(device)
 
     bbox_center = bbox_center.unsqueeze(0)
     rotation, translation = look_at_view_transform(

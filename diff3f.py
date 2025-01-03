@@ -95,10 +95,12 @@ def get_features_per_vertex(
     # Initialize video generator and get renders
     video_gen = MeshVideoGenerator(hw=H, num_views=num_views, device=device)
     batched_renderings, normal_batched_renderings, camera, depth = video_gen.render_mesh_with_depth(mesh)
+    
 
     if use_normal_map:
         normal_batched_renderings = normal_batched_renderings.cpu()
     batched_renderings = batched_renderings.cpu()
+    video_gen.save_video(batched_renderings, "output.mp4", fps=30, display_frames=False)
 
     # Setup pixel coordinates and grid
     pixel_coords = arange_pixels((H, W), invert_y_axis=True)[0]
@@ -140,6 +142,7 @@ def get_features_per_vertex(
         diffusion_input_img = (
                 batched_renderings[idx, :, :, :3].cpu().numpy() * 255
             ).astype(np.uint8)
+        
         if use_normal_map:
             normal_map_input = normal_batched_renderings[idx]
         depth_map = depth[idx, :, :, 0].unsqueeze(0).to(device)
