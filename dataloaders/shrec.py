@@ -23,11 +23,25 @@ def download(shrec_data_path):
     unified_path = os.path.join(shrec_data_path, 'unified')
     if not os.path.exists(unified_path):
         zip_path = os.path.join(shrec_data_path, 'SHREC_r.zip')
-        download_command = f"wget --header=\"Host: nuage.lix.polytechnique.fr\" --header=\"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36\" --header=\"Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9\" --header=\"Accept-Language: en-US,en;q=0.9,he-IL;q=0.8,he;q=0.7\" --header=\"Cookie: __utma=146708137.1725280282.1622015292.1622015292.1622015292.1; __utmz=146708137.1622015292.1.1.utmcsr=google|utmccn=(organic)|utmcmd=organic|utmctr=(not%20provided); oc_sessionPassphrase=UBol3DP5eEbaGWjMpBBerNqPdCAXkZmVUyEnDvJj0Aw%2F2Otbzhxvy9Jaq26v9T1BcCR7cZQWZeroDfZcWS5qJaS%2FZsCL2DGbOnnZtCrYkwd2%2B1A4jXbxKMIfOooHIBBC; occulifztxc2=fsjspr4igecrj3el6jqqeonr0d; __Host-nc_sameSiteCookielax=true; __Host-nc_sameSiteCookiestrict=true\" --header=\"Connection: keep-alive\" \"https://nuage.lix.polytechnique.fr/index.php/s/LJFXrsTG22wYCXx/download?path=%2F&files=SHREC_r.zip\" -c -O {zip_path}"
+        
+        headers = {
+            'Host': 'nuage.lix.polytechnique.fr',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+            'Accept-Language': 'en-US,en;q=0.9,he-IL;q=0.8,he;q=0.7',
+            'Cookie': '__utma=146708137.1725280282.1622015292.1622015292.1622015292.1; __utmz=146708137.1622015292.1.1.utmcsr=google|utmccn=(organic)|utmcmd=organic|utmctr=(not%20provided); oc_sessionPassphrase=UBol3DP5eEbaGWjMpBBerNqPdCAXkZmVUyEnDvJj0Aw%2F2Otbzhxvy9Jaq26v9T1BcCR7cZQWZeroDfZcWS5qJaS%2FZsCL2DGbOnnZtCrYkwd2%2B1A4jXbxKMIfOooHIBBC; occulifztxc2=fsjspr4igecrj3el6jqqeonr0d; __Host-nc_sameSiteCookielax=true; __Host-nc_sameSiteCookiestrict=true',
+            'Connection': 'keep-alive'
+        }
+        
+        header_args = ' '.join([f'-H "{k}: {v}"' for k, v in headers.items()])
+        
+        # Download SHREC_r.zip
+        download_command = f'curl {header_args} -L "https://nuage.lix.polytechnique.fr/index.php/s/LJFXrsTG22wYCXx/download?path=%2F&files=SHREC_r.zip" -C - -o {zip_path}'
         apply_download(download_command, zip_path, shrec_data_path)
 
-        zip_path = zip_path.replace('_r','_r_gt')
-        download_command = f"wget --header=\"Host: nuage.lix.polytechnique.fr\" --header=\"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36\" --header=\"Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9\" --header=\"Accept-Language: en-US,en;q=0.9,he-IL;q=0.8,he;q=0.7\" --header=\"Cookie: __utma=146708137.1725280282.1622015292.1622015292.1622015292.1; __utmz=146708137.1622015292.1.1.utmcsr=google|utmccn=(organic)|utmcmd=organic|utmctr=(not%20provided); oc_sessionPassphrase=UBol3DP5eEbaGWjMpBBerNqPdCAXkZmVUyEnDvJj0Aw%2F2Otbzhxvy9Jaq26v9T1BcCR7cZQWZeroDfZcWS5qJaS%2FZsCL2DGbOnnZtCrYkwd2%2B1A4jXbxKMIfOooHIBBC; occulifztxc2=fsjspr4igecrj3el6jqqeonr0d; __Host-nc_sameSiteCookielax=true; __Host-nc_sameSiteCookiestrict=true\" --header=\"Connection: keep-alive\" \"https://nuage.lix.polytechnique.fr/index.php/s/LJFXrsTG22wYCXx/download?path=%2F&files=SHREC_r_gt.zip\" -c -O {zip_path}"
+        # Download SHREC_r_gt.zip
+        zip_path = zip_path.replace('_r', '_r_gt')
+        download_command = f'curl {header_args} -L "https://nuage.lix.polytechnique.fr/index.php/s/LJFXrsTG22wYCXx/download?path=%2F&files=SHREC_r_gt.zip" -C - -o {zip_path}'
         apply_download(download_command, zip_path, shrec_data_path)
 
 
