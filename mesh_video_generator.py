@@ -3,8 +3,11 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
+from render import batch_render
 from utils import convert_mesh_container_to_torch_mesh
 from dataloaders.mesh_container import MeshContainer
+from pytorch3d.renderer.cameras import look_at_view_transform, PerspectiveCameras
+
 
 class MeshVideoGenerator:
     def __init__(self, output_dir="outputs", hw=128, num_views=10, use_normal_map=True, device="cuda"):
@@ -37,33 +40,33 @@ class MeshVideoGenerator:
         return mesh, file_to_load
     
     def render_mesh_with_depth(self, mesh):
-        torch_mesh = convert_mesh_container_to_torch_mesh(mesh, device=self.device, is_tosca=False)
+        # torch_mesh = convert_mesh_container_to_torch_mesh(mesh, device=self.device, is_tosca=False)
+        torch_mesh = mesh
         
         # Get both rotations with depth
-        azimuth_data = batch_render(
+        #azimuth_data = batch_render(
+        arenderings, anormal_renderings, acamera, adepth = batch_render(
             device=self.device,
             mesh=torch_mesh,
             num_views=self.num_views,
             H=self.hw,
             W=self.hw,
+            use_normal_map=self.use_normal_map,
             fixed_angle={'type': 'elevation', 'value': 0}
         )
         
-        elevation_data = batch_render(
+        
+        """ elevation_data = batch_render(
             device=self.device,
             mesh=torch_mesh,
             num_views=self.num_views,
             H=self.hw,
             W=self.hw,
+            use_normal_map=self.use_normal_map,
             fixed_angle={'type': 'azimuth', 'value': 0}
-        )
+        ) """
         
-        # Combine renders, depths and cameras
-        renders = torch.cat([azimuth_data[0], elevation_data[0]], dim=0)
-        depths = torch.cat([azimuth_data[3], elevation_data[3]], dim=0)
-        cameras = torch.cat([azimuth_data[2], elevation_data[2]], dim=0)
-        
-        return renders, depths, cameras
+        return  arenderings, anormal_renderings, acamera, adepth
     
     def render_mesh(self, mesh):
         from diff3f import batch_render
@@ -98,7 +101,7 @@ class MeshVideoGenerator:
         return combined_renders
 
     def save_video(self, renderings, output_path, fps=30, display_frames=False):
-        renderings = renderings.cpu().numpy()
+        renderings = renderings.numpy()
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(output_path, fourcc, fps, (self.hw, self.hw))
         

@@ -56,9 +56,16 @@ def setup_rasterizer_and_lights(device, camera, image_size, camera_positions=Non
 
 @torch.no_grad()
 def compute_camera_transform_fixed_elevation(device, num_views, bbox_center, distance, fixed_angle):
-    angle_step = 360.0 / num_views
+    """ angle_step = 360.0 / num_views
     azimuth = torch.linspace(0, 360 - angle_step, num_views).to(device)
-    elevation = torch.full_like(azimuth, fixed_angle['value'] if fixed_angle else 0.0).to(device)
+    elevation = torch.full_like(azimuth, fixed_angle['value']).to(device)
+    #elevation = torch.full_like(azimuth, fixed_angle['value'] if fixed_angle else 0.0).to(device)
+ """
+    steps = int(math.sqrt(num_views))
+    end = 360 - 360/steps
+    elevation = torch.linspace(start=0, end=end, steps=steps).repeat(steps)
+    azimuth = torch.linspace(start=0, end=end, steps=steps)
+    azimuth = torch.repeat_interleave(azimuth, steps)
 
     bbox_center = bbox_center.unsqueeze(0)
     rotation, translation = look_at_view_transform(
@@ -120,9 +127,9 @@ def compute_camera_transform_fixed_azimuth(device, num_views, bbox_center, dista
             flip_flags.append(True)
         
         # Add stability to cross products
-        right = torch.cross(view_dir, up)
+        right = torch.cross(view_dir, up, dim=0)
         right = right / (torch.norm(right) + 1e-8)
-        up = torch.cross(right, view_dir)
+        up = torch.cross(right, view_dir, dim=0)
         up = up / (torch.norm(up) + 1e-8)
         
         up_vectors.append(up.unsqueeze(0))
