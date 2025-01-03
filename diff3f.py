@@ -135,18 +135,7 @@ def get_features_per_vertex(
             )  # .cpu()
         ).to(device)
         
-
-        print(f"start process frame {idx}")
         # Process frame and map features
-
-
-        """ # Extract SAM2 features
-        sam_features = get_sam_features(device, sam_model, frame, grid)
-        sam_features = (
-            sam_features.squeeze(0).permute(1, 0).to(device)
-        )  # Shape: [1024, 256]
-        sam_features = sam_features.T  # Final shape: [256, 1024] """
-
 
         diffusion_input_img = (
                 batched_renderings[idx, :, :, :3].cpu().numpy() * 255
@@ -156,12 +145,9 @@ def get_features_per_vertex(
         depth_map = depth[idx, :, :, 0].unsqueeze(0).to(device)
         if prompts_list is not None:
             prompt = random.choice(prompts_list)
-        print(f"diffusion_input_img shape: {diffusion_input_img.shape}")
-        print(f"depth_map shape: {depth_map.shape}")
-        if normal_map_input is not None:
-            print(f"normal_map_input shape: {normal_map_input.shape}")
 
 
+        """ 
         diffusion_output = add_texture_to_render(
             pipe,
             diffusion_input_img,
@@ -171,34 +157,23 @@ def get_features_per_vertex(
             use_latent=use_latent,
             num_images_per_prompt=num_images_per_prompt,
             return_image=return_image
-        )
-        print(f"diffusion_output shape: {[x.shape for x in diffusion_output]}")
-
-
-        print(f"diffusion_output[1].shape: {diffusion_output[1].shape}")
-        print(f"aligned_dino_features.shape: {aligned_dino_features.shape}")
-        print(f"ft.shape: {ft.shape}")
-        print(f"grid.shape: {grid.shape}")
+        ) """
         
-        aligned_dino_features = get_sam_features(device, sam_model, diffusion_output[1][0], grid)
-        print(f"SAM features shape: {aligned_dino_features.shape}")
+        
+        aligned_dino_features = get_sam_features(device, sam_model, diffusion_input_img, grid)
 
-
-        with torch.no_grad():
+        """ with torch.no_grad():
             ft = torch.nn.Upsample(size=(H,W), mode="bilinear")(diffusion_output[0].unsqueeze(0)).to(device)
             ft_dim = ft.size(1)
             aligned_features = torch.nn.functional.grid_sample(
                 ft, grid, align_corners=False
             ).reshape(1, ft_dim, -1)
-            aligned_features = torch.nn.functional.normalize(aligned_features, dim=1)
+            aligned_features = torch.nn.fu nctional.normalize(aligned_features, dim=1)"""
         # this is feature per pixel in the grid
         
         aligned_features = aligned_dino_features
 
         features_per_pixel = aligned_features[0, :, indices].cpu()
-
-        print(f"Features shape before alignment: {features_per_pixel.shape}")
-        print(f"World coords shape: {world_coords.shape}")
 
 
         # map pixel to vertex on mesh

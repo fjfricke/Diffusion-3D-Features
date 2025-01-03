@@ -45,7 +45,7 @@ class MeshVideoGenerator:
         
         # Get both rotations with depth
         #azimuth_data = batch_render(
-        arenderings, anormal_renderings, acamera, adepth = batch_render(
+        azimuth_renderings, azimuth_normals, azimuth_camera, azimuth_depth = batch_render(
             device=self.device,
             mesh=torch_mesh,
             num_views=self.num_views,
@@ -56,7 +56,7 @@ class MeshVideoGenerator:
         )
         
         
-        """ elevation_data = batch_render(
+        elevation_renderings, elevation_normals, elevation_camera, elevation_depth = batch_render(
             device=self.device,
             mesh=torch_mesh,
             num_views=self.num_views,
@@ -64,9 +64,35 @@ class MeshVideoGenerator:
             W=self.hw,
             use_normal_map=self.use_normal_map,
             fixed_angle={'type': 'azimuth', 'value': 0}
-        ) """
+        )
         
-        return  arenderings, anormal_renderings, acamera, adepth
+        try:
+            combined_renderings = torch.cat([elevation_renderings, azimuth_renderings], dim=0)
+            combined_depth = torch.cat([elevation_depth, azimuth_depth], dim=0)
+            
+            if self.use_normal_map and elevation_normals is not None and azimuth_normals is not None:
+                combined_normals = torch.cat([elevation_normals, azimuth_normals], dim=0)
+            else:
+                combined_normals = None
+                
+            # Concatenate cameras by combining their R and T matrices
+            R = torch.cat([elevation_camera.R, azimuth_camera.R], dim=0)
+            T = torch.cat([elevation_camera.T, azimuth_camera.T], dim=0)
+            
+            # Create new combined camera
+            combined_camera = PerspectiveCameras(
+                R=R,
+                T=T,
+                device=self.device
+            )
+            
+            return combined_renderings, combined_normals, combined_camera, combined_depth
+        
+        except Exception as e:
+            print(f"Error concatenating renderings: {str(e)}")
+            print(f"Elevation renderings shape: {elevation_renderings.shape}")
+            print(f"Azimuth renderings shape: {azimuth_renderings.shape}")
+            return None, None, None, None
     
     def render_mesh(self, mesh):
         from diff3f import batch_render
