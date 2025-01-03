@@ -41,5 +41,7 @@ dependencies:
   # export LIBRARY_PATH=$CONDA_PREFIX/lib:$LIBRARY_PATH
   # export LDFLAGS="-L$CONDA_PREFIX/lib $LDFLAGS"
   # MACOSX_DEPLOYMENT_TARGET=10.14 CC=clang CXX=clang++ pip install "git+https://github.com/facebookresearch/pytorch3d.git"
+  # git clone https://github.com/facebookresearch/sam2
+  # mv sam2 sam2_download
   # cd sam2_download
   # SAM2_BUILD_CUDA=0 pip install -e
