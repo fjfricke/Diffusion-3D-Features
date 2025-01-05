@@ -3,6 +3,7 @@ from PIL import Image
 import numpy as np
 from diffusion import add_texture_to_render
 from sam2_setup import get_sam_features
+from dino import get_dino_features
 from pytorch3d.ops import ball_query
 from mesh_video_generator import MeshVideoGenerator
 from tqdm import tqdm
@@ -10,7 +11,9 @@ from time import time
 import random
 
 
-SAM_FEATURE_DIMS = 256
+FEATURE_DIMS_DIFFUSION = 1280
+FEATURE_DIMS_DINO = 768
+FEATURE_DIMS_SAM = 256
 VERTEX_GPU_LIMIT = 35000
 
 
@@ -61,6 +64,7 @@ def get_features_per_vertex(
     device,
     sam_model,
     pipe,
+    dino_model,
     mesh,
     prompt,
     num_views=100,
@@ -74,6 +78,9 @@ def get_features_per_vertex(
     return_image=True,
     bq=True,
     prompts_list=None,
+    use_sam=False,
+    use_only_diffusion=False,
+    use_diffusion=True,
 ):
     """Main function to extract and map features to mesh vertices."""
     t1 = time()
@@ -114,8 +121,17 @@ def get_features_per_vertex(
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
+    feature_dims = 0
+    if use_diffusion:
+        feature_dims += FEATURE_DIMS_DIFFUSION
+    if not use_only_diffusion:
+        if use_sam:
+            feature_dims += FEATURE_DIMS_SAM
+        else:
+            feature_dims += FEATURE_DIMS_DINO
+
     # Initialize feature storage
-    ft_per_vertex = torch.zeros((len(mesh_vertices), SAM_FEATURE_DIMS)).half()  # .to(device)
+    ft_per_vertex = torch.zeros((len(mesh_vertices), feature_dims)).half()  # .to(device)
     ft_per_vertex_count = torch.zeros((len(mesh_vertices), 1)).half()  # .to(device)
 
     # Process each frame
@@ -154,8 +170,22 @@ def get_features_per_vertex(
             return_image=return_image
         )
 
-        aligned_dino_features = get_sam_features(device, sam_model, diffusion_input_img, grid)
-        aligned_features = None
+        # Check the full structure
+        print("Type:", type(diffusion_output))
+        print("Length:", len(diffusion_output))
+        print("First element type:", type(diffusion_output[0]))
+        if len(diffusion_output) > 1:
+            print("Second element type:", type(diffusion_output[1]))
+
+        ### TODO
+        if not use_only_diffusion:
+            if not use_sam:
+                aligned_dino_features = get_dino_features(device, dino_model, diffusion_output[1][0], grid)
+            else:
+                aligned_dino_features = get_sam_features(device, sam_model, diffusion_input_img, grid)
+        ###
+
+        #aligned_dino_features = get_sam_features(device, sam_model, diffusion_input_img, grid)
 
         with torch.no_grad():
             ft = torch.nn.Upsample(size=(H,W), mode="bilinear")(diffusion_output[0].unsqueeze(0)).to(device)
@@ -165,8 +195,17 @@ def get_features_per_vertex(
             ).reshape(1, ft_dim, -1)
             aligned_features = torch.nn.functional.normalize(aligned_features, dim=1)
         # this is feature per pixel in the grid
-        aligned_features = aligned_dino_features
+        ### TODO
+        if not use_only_diffusion:
+            if not use_diffusion:
+                aligned_features = aligned_dino_features
+            else:
+                aligned_features = torch.hstack([aligned_features*0.5, aligned_dino_features*0.5])
+        ###
+        
+        # aligned_features = aligned_dino_features
         features_per_pixel = aligned_features[0, :, indices].cpu()
+
         # map pixel to vertex on mesh
         if bq:
             queried_indices = (
