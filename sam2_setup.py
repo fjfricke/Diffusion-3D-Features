@@ -3,6 +3,7 @@ from sam2.build_sam import build_sam2
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 import numpy as np
 from sam2.modeling.sam2_base import SAM2Base
+from dino import init_dino, get_dino_features
 
 
 def init_sam2(device, model_size="large"):
@@ -17,7 +18,7 @@ def init_sam2(device, model_size="large"):
 torch.no_grad()
 def get_sam_features(device, sam_model, img, grid=None, get_features_directly=False):
     intermediate_embeddings = []
-    add_hook_to_get_embeddings_for_layers(sam_model, ["sam_mask_decoder.output_upscaling.3"], intermediate_embeddings)
+    add_hook_to_get_embeddings_for_layers(sam_model, ["sam_mask_decoder.output_upscaling.3", "sam_mask_decoder.transformer.layers.0.cross_attn_image_to_token.out_proj"], intermediate_embeddings)
    # Use SAM's predictor to get features
     predictor = SAM2ImagePredictor(sam_model)
     predictor.set_image(img)
@@ -26,15 +27,22 @@ def get_sam_features(device, sam_model, img, grid=None, get_features_directly=Fa
     predictor.predict()
     features = intermediate_embeddings[0]
     # features = predictor._features["high_res_feats"][0]
+
+    if features.dim() == 3:
+        B, HW, D = features.shape
+        H, W = int(HW**0.5), int(HW**0.5)
+        features = features.view(B, H, W, D).permute(0, 3, 1, 2)
     if get_features_directly:
         return features
+
 
     # Process features similar to DINO
     h, w = features.shape[2], features.shape[3]  # Get spatial dimensions directly from features
     dim = features.shape[1]  # Feature dimension is in channel position
     features = features.reshape(-1, h, w, dim).permute(0, 3, 1, 2)
     features = features.half()
-    if grid:
+
+    if grid is not None:
         features = torch.nn.functional.grid_sample(
             features, grid, align_corners=False
         ).reshape(1, dim, -1)
@@ -156,6 +164,7 @@ def run_test_pca():
 
     device = "cuda"
     sam_model = init_sam2(device)
+    dino_model = init_dino(device)
 
     # # Load first frame from video
     # cap = cv2.VideoCapture("SHREC19_videos/1_combined.mp4")
@@ -180,6 +189,7 @@ def run_test_pca():
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     features = get_sam_features(device, sam_model, img, get_features_directly=True)
+    features_dino = get_dino_features(device, dino_model, img, grid=None)
 
     # Reshape features for PCA
     features_reshaped = features.squeeze().permute(1, 2, 0).reshape(-1, features.shape[1]).cpu().numpy()
