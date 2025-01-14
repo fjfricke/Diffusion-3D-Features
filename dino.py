@@ -15,7 +15,7 @@ def init_dino(device):
     return model
 
 @torch.no_grad
-def get_dino_features(device, dino_model, img, grid):
+def get_dino_features(device, dino_model, img, grid=None, get_features_directly=False):
     transform = tfs.Compose(
         [
             tfs.Resize((518, 518)),
@@ -28,6 +28,8 @@ def get_dino_features(device, dino_model, img, grid):
     h, w = int(img.shape[2] / patch_size), int(img.shape[3] / patch_size)
     dim = features.shape[-1]
     features = features.reshape(-1, h, w, dim).permute(0, 3, 1, 2)
+    if get_features_directly:
+        return features
     features = torch.nn.functional.grid_sample(
         features, grid, align_corners=False
     ).reshape(1, 768, -1)

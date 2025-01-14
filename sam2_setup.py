@@ -1,14 +1,15 @@
 import torch
-from sam2.build_sam import build_sam2
+from sam2.build_sam import build_sam2 
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 import numpy as np
 from sam2.modeling.sam2_base import SAM2Base
 from dino import init_dino, get_dino_features
+from pathlib import Path
 
 
 def init_sam2(device, model_size="large"):
-    sam2_checkpoint = "checkpoints/sam2.1_hiera_large.pt"
-    model_cfg = "configs/sam2.1/sam2.1_hiera_l.yaml"
+    sam2_checkpoint = "/" + str(Path(__file__).parent / "sam2_download" / "checkpoints/sam2.1_hiera_large.pt")
+    model_cfg = "/" + str(Path(__file__).parent / "sam2_download/sam2" / "configs/sam2.1/sam2.1_hiera_l.yaml")
 
     model = build_sam2(model_cfg, sam2_checkpoint, device=device)
     # model = model.to(device).eval()c\
@@ -16,12 +17,14 @@ def init_sam2(device, model_size="large"):
 
 
 torch.no_grad()
-def get_sam_features(device, sam_model, img, grid=None, get_features_directly=False):
+def get_sam_features(device, sam_model, img, grid=None, get_features_directly=False, layer_name="sam_mask_decoder.transformer.layers.0.cross_attn_image_to_token.out_proj"):
     intermediate_embeddings = []
-    add_hook_to_get_embeddings_for_layers(sam_model, ["sam_mask_decoder.output_upscaling.3", "sam_mask_decoder.transformer.layers.0.cross_attn_image_to_token.out_proj"], intermediate_embeddings)
+    # add_hook_to_get_embeddings_for_layers(sam_model, ["sam_mask_decoder.output_upscaling.3", "sam_mask_decoder.transformer.layers.0.cross_attn_image_to_token.out_proj"], intermediate_embeddings)
+    add_hook_to_get_embeddings_for_layers(sam_model, [layer_name], intermediate_embeddings)
    # Use SAM's predictor to get features
     predictor = SAM2ImagePredictor(sam_model)
     predictor.set_image(img)
+    print(predictor.model.image_size)
     # Get features from the specified intermediate layer
     # features = predictor._features["image_embed"]
     predictor.predict()
@@ -33,13 +36,23 @@ def get_sam_features(device, sam_model, img, grid=None, get_features_directly=Fa
         H, W = int(HW**0.5), int(HW**0.5)
         features = features.view(B, H, W, D).permute(0, 3, 1, 2)
     if get_features_directly:
+        if features.shape[1] == features.shape[2]:
+            features = features.permute(0, 3, 1, 2)
+        if features.shape[0] > 1:
+            # take mean
+            features = features.mean(dim=0).unsqueeze(0)
         return features
 
 
     # Process features similar to DINO
-    h, w = features.shape[2], features.shape[3]  # Get spatial dimensions directly from features
-    dim = features.shape[1]  # Feature dimension is in channel position
-    features = features.reshape(-1, h, w, dim).permute(0, 3, 1, 2)
+    if features.shape[2] == features.shape[3]:
+        h, w = features.shape[2], features.shape[3]  # Get spatial dimensions directly from features
+        dim = features.shape[1]  # Feature dimension is in channel position
+        features = features.reshape(-1, h, w, dim).permute(0, 3, 1, 2)
+    elif features.shape[1] == features.shape[2]:
+        h, w = features.shape[1], features.shape[2]
+        dim = features.shape[3]
+        features = features.reshape(-1, h, w, dim)
     features = features.half()
 
     if grid is not None:
@@ -129,9 +142,10 @@ def get_information_on_intermediate_embeddings():
     # run_pca_on_specific_embeddings(intermediate_embeddings_decoder[60][1], 'sam_features_pca_decoder_60')
     return intermediate_embeddings, intermediate_embeddings_decoder
 
-def run_pca_on_specific_embeddings(embeddings, img_name=False):
+def run_pca_on_specific_embeddings(embeddings, img_name=False, display=False, save_to=False):
     from sklearn.decomposition import PCA
     from PIL import Image
+    import matplotlib.pyplot as plt 
     # Reshape features for PCA
     features_reshaped = embeddings.squeeze().permute(1, 2, 0).reshape(-1, embeddings.shape[1]).cpu().numpy()
 
@@ -149,6 +163,14 @@ def run_pca_on_specific_embeddings(embeddings, img_name=False):
     h, w = embeddings.shape[2], embeddings.shape[3]
     feature_img = features_pca.reshape(h, w, 3)
 
+    # Display the image using matplotlib
+    if display:
+        plt.imshow(feature_img)
+        plt.axis('off')  # Hide axis
+        plt.show()  # Open a new window with the image
+
+    if save_to:
+        Image.fromarray(feature_img).save(save_to)
     if img_name:
         Image.fromarray(feature_img).save(f'test_images/{img_name}.png')
 
