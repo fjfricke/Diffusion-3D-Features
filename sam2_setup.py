@@ -17,18 +17,19 @@ def init_sam2(device, model_size="large"):
 
 
 torch.no_grad()
-def get_sam_features(device, sam_model, img, grid=None, get_features_directly=False, layer_name="sam_mask_decoder.transformer.layers.0.cross_attn_image_to_token.out_proj"):
+def get_sam_features(device, sam_model, img, grid=None, get_features_directly=False, layer_name="sam_mask_decoder.transformer.layers.0.cross_attn_image_to_token.out_proj", box=None):
     intermediate_embeddings = []
     # add_hook_to_get_embeddings_for_layers(sam_model, ["sam_mask_decoder.output_upscaling.3", "sam_mask_decoder.transformer.layers.0.cross_attn_image_to_token.out_proj"], intermediate_embeddings)
     add_hook_to_get_embeddings_for_layers(sam_model, [layer_name], intermediate_embeddings)
    # Use SAM's predictor to get features
     predictor = SAM2ImagePredictor(sam_model)
     predictor.set_image(img)
-    print(predictor.model.image_size)
     # Get features from the specified intermediate layer
-    # features = predictor._features["image_embed"]
-    predictor.predict()
-    features = intermediate_embeddings[0]
+    if layer_name == "image_embed":
+        features = predictor._features["image_embed"]
+    else:
+        predictor.predict(box=box)
+        features = intermediate_embeddings[0]
     # features = predictor._features["high_res_feats"][0]
 
     if features.dim() == 3:
@@ -142,7 +143,9 @@ def get_information_on_intermediate_embeddings():
     # run_pca_on_specific_embeddings(intermediate_embeddings_decoder[60][1], 'sam_features_pca_decoder_60')
     return intermediate_embeddings, intermediate_embeddings_decoder
 
-def run_pca_on_specific_embeddings(embeddings, img_name=False, display=False, save_to=False):
+def run_pca_on_specific_embeddings(embeddings, img_name=False, display=False, save_to=False, n_components=3):
+    if not n_components:
+        n_components = 3
     from sklearn.decomposition import PCA
     from PIL import Image
     import matplotlib.pyplot as plt 
@@ -150,7 +153,7 @@ def run_pca_on_specific_embeddings(embeddings, img_name=False, display=False, sa
     features_reshaped = embeddings.squeeze().permute(1, 2, 0).reshape(-1, embeddings.shape[1]).cpu().numpy()
 
     # Apply PCA to reduce dimensions to 3
-    pca = PCA(n_components=3)
+    pca = PCA(n_components=n_components)
     features_pca = pca.fit_transform(features_reshaped)
 
     # Normalize the PCA features to 0-255 for RGB visualization
@@ -161,19 +164,24 @@ def run_pca_on_specific_embeddings(embeddings, img_name=False, display=False, sa
 
     # Reshape back to image dimensions
     h, w = embeddings.shape[2], embeddings.shape[3]
-    feature_img = features_pca.reshape(h, w, 3)
+    feature_img = features_pca.reshape(h, w, n_components)
 
-    # Display the image using matplotlib
-    if display:
-        plt.imshow(feature_img)
-        plt.axis('off')  # Hide axis
-        plt.show()  # Open a new window with the image
+    if n_components >= 3:
+        features_img_first_3 = feature_img[:, :, :3]
+        # Display the image using matplotlib
+        if display:
+            plt.imshow(features_img_first_3)
+            plt.axis('off')  # Hide axis
+            plt.show()  # Open a new window with the image
 
-    if save_to:
-        Image.fromarray(feature_img).save(save_to)
-    if img_name:
-        Image.fromarray(feature_img).save(f'test_images/{img_name}.png')
+        if save_to:
+            Image.fromarray(features_img_first_3).save(save_to)
+        if img_name:
+            Image.fromarray(features_img_first_3).save(f'test_images/{img_name}.png')
 
+    feature_img = np.expand_dims(feature_img, axis=0)
+    feature_img = np.transpose(feature_img, (0, 3, 1, 2))  # Change to B, C, H, W
+    feature_img = torch.tensor(feature_img, dtype=torch.float32)  # Convert to a float tensor
     return feature_img
 
 

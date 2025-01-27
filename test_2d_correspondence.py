@@ -10,6 +10,7 @@ import torch
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
+from tqdm import tqdm
 
 def load_images(img_path_1, img_path_2):
     img_1 = cv2.imread(img_path_1)
@@ -32,8 +33,8 @@ def resize_features_to_image_size(features, original_image_size):
 
 def calculate_correspondence_in_img2_for_a_point_in_img1(point_in_feat_img1, feat_img_1, feat_img_2):
     # Extract the feature vector for the given point in img1
-    feature_vector_img1 = feat_img_1[:, :, point_in_feat_img1[0], point_in_feat_img1[1]]
-
+    feature_vector_img1 = feat_img_1[:, :, point_in_feat_img1[1], point_in_feat_img1[0]]
+    print(feature_vector_img1.shape)
     # Calculate the Euclidean distance between the feature vector of img1 and all feature vectors in img2
     distances = torch.norm(feat_img_2 - feature_vector_img1.unsqueeze(-1).unsqueeze(-1), dim=1)
 
@@ -64,6 +65,9 @@ def plot_heatmap(original_img, heatmap, display=True, save_to=False):
         plt.imshow(overlayed_img)
         plt.axis('off')
         plt.show()
+        plt.imshow(heatmap_resized, cmap='jet')
+        plt.axis('off')
+        plt.show()
     if save_to:
         Image.fromarray(overlayed_img).save(save_to)
 
@@ -85,8 +89,10 @@ def display_image_with_point(image, point, display=True, save_to=False):
     if save_to:
         Image.fromarray(image_with_point).save(save_to)
 
-def run_2d_correspondence(dino_or_sam="sam", display=True, save_to=False, layer_name="image_encoder.trunk.blocks.24"):
+def run_2d_correspondence(dino_or_sam="sam", display=True, save_to=False, layer_name="image_encoder.trunk.blocks.24", use_pca_with_n_components=False, point="ear"):
     img_1, img_2 = load_images("test_images/input_cow.jpg", "test_images/input_cow_2.jpg")
+    # img_1 = cv2.resize(img_1, (1024, 1024))
+    # img_2 = cv2.resize(img_2, (1024, 1024))
     device = "mps"
     if dino_or_sam == "sam":
         sam_model = init_sam2(device=device)
@@ -104,12 +110,81 @@ def run_2d_correspondence(dino_or_sam="sam", display=True, save_to=False, layer_
     features_2 = resize_features_to_image_size(features_2, img_2.shape[:2])
     if save_to:
         save_to = f"{save_to}_pca_img1.png"
+    pca_features_1 = run_pca_on_specific_embeddings(features_1, display=display, save_to=save_to, n_components=use_pca_with_n_components)
+    if save_to:
+        save_to = f"{save_to}_pca_img2.png"
+    pca_features_2 = run_pca_on_specific_embeddings(features_2, display=display, save_to=save_to, n_components=use_pca_with_n_components)
+
+    if use_pca_with_n_components:
+        features_1 = pca_features_1
+        features_2 = pca_features_2
+
+    if point == "ear":
+        point_in_feat_img1 = (65, 58)
+    elif point == "leg":
+        point_in_feat_img1 = (435, 321)
+    else:
+        raise ValueError(f"Point {point} not supported")
+    if save_to:
+        save_to = f"{save_to}_point_in_feat_img1.png"
+    display_image_with_point(img_1, point_in_feat_img1, display=display, save_to=save_to)
+    heatmap = calculate_correspondence_in_img2_for_a_point_in_img1(point_in_feat_img1, features_1, features_2)
+    if save_to:
+        save_to = f"{save_to}_heatmap.png"
+    plot_heatmap(img_2, heatmap, display=display, save_to=save_to)
+
+def create_box_mask_batches(img, batch_size=16):
+    if img.shape[0] % batch_size != 0 or img.shape[1] % batch_size != 0:
+        raise ValueError(f"Image dimensions {img.shape} are not divisible by batch size {batch_size}")
+    # create list of mask batches where each is an ndarray with BHBH format marking the mask as a square ( e.g. [0, 0, 16, 16])
+    mask_batches = []
+    for i in range(0, img.shape[0], batch_size):
+        for j in range(0, img.shape[1], batch_size):
+            # Create a mask with BHBH format
+            mask = np.array([i, j, i + batch_size, j + batch_size])
+            mask_batches.append(mask)
+    return mask_batches
+
+
+def run_2d_correspondence_with_sam_masks(dino_or_sam="dino", display=True, save_to=False, layer_name="image_encoder.trunk.blocks.24", box_size=512):
+    img_1, img_2 = load_images("test_images/input_cow.jpg", "test_images/input_cow_2.jpg")
+    img_1 = cv2.resize(img_1, (1024, 1024))
+    img_2 = cv2.resize(img_2, (1024, 1024))
+    device = "mps"
+    sam_model = init_sam2(device=device)
+    box_mask_batches = create_box_mask_batches(img_1, box_size)
+    features_1 = None
+    features_2 = None
+    for box_mask_batch in tqdm(box_mask_batches, desc="Processing mask batches"):
+        mask_features_1 = get_sam_features(device=device, sam_model=sam_model, img=img_1, get_features_directly=True, layer_name=layer_name, box=box_mask_batch)
+        mask_features_2 = get_sam_features(device=device, sam_model=sam_model, img=img_2, get_features_directly=True, layer_name=layer_name, box=box_mask_batch)
+        mask_features_1 = resize_features_to_image_size(mask_features_1, img_1.shape[:2])
+        mask_features_2 = resize_features_to_image_size(mask_features_2, img_2.shape[:2])
+        if features_1 is None:
+            features_1 = torch.zeros(mask_features_1.shape, device=mask_features_1.device)
+        if features_2 is None:
+            features_2 = torch.zeros(mask_features_2.shape, device=mask_features_2.device)
+        # Extract mask coordinates
+        # x1, y1, x2, y2 = box_mask_batch
+        # mask_features_1 = mask_features_1[:, :, x1:x2, y1:y2]
+        # mask_features_2 = mask_features_2[:, :, x1:x2, y1:y2]
+        # mask_features_1 = F.normalize(mask_features_1, p=2, dim=1)
+        # mask_features_2 = F.normalize(mask_features_2, p=2, dim=1)
+        
+        # Add features only within the masked region
+        # features_1[:, :, x1:x2, y1:y2] = mask_features_1
+        # features_2[:, :, x1:x2, y1:y2] = mask_features_2
+        features_1 += mask_features_1
+        features_2 += mask_features_2
+    features_1 = F.normalize(features_1, p=2, dim=1)
+    features_2 = F.normalize(features_2, p=2, dim=1)
+    if save_to:
+        save_to = f"{save_to}_pca_img1.png"
     run_pca_on_specific_embeddings(features_1, display=display, save_to=save_to)
     if save_to:
         save_to = f"{save_to}_pca_img2.png"
     run_pca_on_specific_embeddings(features_2, display=display, save_to=save_to)
-
-    point_in_feat_img1 = (65, 58)
+    point_in_feat_img1 = (124, 168)
     if save_to:
         save_to = f"{save_to}_point_in_feat_img1.png"
     display_image_with_point(img_1, point_in_feat_img1, display=display, save_to=save_to)
@@ -120,9 +195,11 @@ def run_2d_correspondence(dino_or_sam="sam", display=True, save_to=False, layer_
 
 
 if __name__ == "__main__":
-    run_2d_correspondence(dino_or_sam="sam", display=True, save_to=False, layer_name="sam_mask_decoder.output_upscaling.0")
+    # run_2d_correspondence_with_sam_masks(dino_or_sam="sam", display=True, save_to="test_images/output_batched/size_128_upscaling_0_full_add", layer_name="sam_mask_decoder.output_upscaling.0", box_size=128)
+    run_2d_correspondence(dino_or_sam="sam", display=False, save_to="test_images/presentation/sam_last_upscale0/sam_last_upscale0_pca3_leg", layer_name="sam_mask_decoder.output_upscaling.0", use_pca_with_n_components=3, point="leg")
     # for i in range(48):
     #     print(f"Running layer {i}")
     #     run_2d_correspondence(dino_or_sam="sam", display=False, save_to=f"test_images/output_attn/sam_2d_correspondence_layer_{i}", layer_name=f"image_encoder.trunk.blocks.{i}.attn")
 
 
+# "test_images/presentation/sam_last_upscale0/sam_last_upscale0_pca3"
