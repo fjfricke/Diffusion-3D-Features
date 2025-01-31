@@ -103,7 +103,7 @@ def get_features_per_vertex(
     if use_normal_map:
         normal_batched_renderings = normal_batched_renderings.cpu()
     batched_renderings = batched_renderings.cpu()
-    video_gen.save_video(batched_renderings, "output.mp4", fps=30, display_frames=False)
+    # video_gen.save_video(batched_renderings, "output.mp4", fps=30, display_frames=False)
 
     # Setup pixel coordinates and grid
     pixel_coords = arange_pixels((H, W), invert_y_axis=True)[0]
