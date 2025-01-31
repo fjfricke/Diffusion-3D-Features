@@ -99,11 +99,7 @@ def get_features_per_vertex(
     # Initialize video generator and get renders
     video_gen = MeshVideoGenerator(hw=H, num_views=num_views, device=device)
     batched_renderings, normal_batched_renderings, camera, depth = video_gen.render_mesh_with_depth(mesh)
-    print("batched_renderings shape: ", batched_renderings.shape)
-    print("normal_batched_renderings shape: ", normal_batched_renderings.shape)
-    print("camera R:", camera.R) 
-    print("camera T:", camera.T) 
-    print("depth shape: ", depth.shape)
+   
     if use_normal_map:
         normal_batched_renderings = normal_batched_renderings.cpu()
     batched_renderings = batched_renderings.cpu()
@@ -170,12 +166,6 @@ def get_features_per_vertex(
             return_image=return_image
         )
 
-        # Check the full structure
-        print("Type:", type(diffusion_output))
-        print("Length:", len(diffusion_output))
-        print("First element type:", type(diffusion_output[0]))
-        if len(diffusion_output) > 1:
-            print("Second element type:", type(diffusion_output[1]))
 
         ### TODO
         if not use_only_diffusion:

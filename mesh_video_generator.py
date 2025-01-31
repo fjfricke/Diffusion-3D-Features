@@ -1,12 +1,12 @@
 import os
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
 import torch
 from render import batch_render
 from utils import convert_mesh_container_to_torch_mesh
 from dataloaders.mesh_container import MeshContainer
 from pytorch3d.renderer.cameras import look_at_view_transform, PerspectiveCameras
+from pytorch3d.io import load_objs_as_meshes
 
 
 class MeshVideoGenerator:
@@ -36,7 +36,7 @@ class MeshVideoGenerator:
         print(f"Loading file: {file_path}")
         
         # Load the mesh
-        mesh = MeshContainer().load_from_file(file_path)
+        mesh = load_objs_as_meshes([file_path], device=self.device)
         return mesh, file_to_load
     
     def render_mesh_with_depth(self, mesh):
@@ -128,7 +128,8 @@ class MeshVideoGenerator:
         return combined_renders
 
     def save_video(self, renderings, output_path, fps=30, display_frames=False):
-        renderings = renderings.numpy()
+        # Move to CPU first, then convert to numpy
+        renderings = renderings.cpu().numpy()
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(output_path, fourcc, fps, (self.hw, self.hw))
         
