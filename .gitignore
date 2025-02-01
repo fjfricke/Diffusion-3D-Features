@@ -1,5 +1,8 @@
 sam2_download/
 checkpoints/
+data/
+*.npy
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

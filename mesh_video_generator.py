@@ -3,9 +3,7 @@ import cv2
 import numpy as np
 import torch
 from render import batch_render
-from utils import convert_mesh_container_to_torch_mesh
-from dataloaders.mesh_container import MeshContainer
-from pytorch3d.renderer.cameras import look_at_view_transform, PerspectiveCameras
+from pytorch3d.renderer.cameras import PerspectiveCameras
 from pytorch3d.io import load_objs_as_meshes
 
 
