@@ -13,7 +13,56 @@ import meshplot as mp
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import colorsys
+from diff3f import get_features_per_vertex
 
+def compute_features(
+    device,
+    sam_model,
+    dino_model,
+    pipe,
+    mesh_input,
+    prompt,
+    num_views,
+    H,
+    W,
+    tolerance,
+    use_normal_map=True,
+    num_images_per_prompt=1,
+    bq=True,
+    use_sam=False,
+    use_only_diffusion=False,
+    use_diffusion=True,
+    is_tosca=False
+):
+    # Convert to PyTorch3D mesh if needed
+    mesh = (mesh_input if hasattr(mesh_input, 'verts_list') 
+            else convert_mesh_container_to_torch_mesh(mesh_input, device=device, is_tosca=is_tosca))
+    
+    # Get mesh vertices
+    mesh_vertices = mesh.verts_list()[0]
+
+    # Compute features using all available models
+    features = get_features_per_vertex(
+        device=device,
+        sam_model=sam_model,
+        pipe=pipe, 
+        dino_model=dino_model,
+        mesh=mesh,
+        prompt=prompt,
+        num_views=num_views,
+        H=H,
+        W=W,
+        tolerance=tolerance,
+        use_normal_map=use_normal_map,
+        num_images_per_prompt=num_images_per_prompt,
+        mesh_vertices=mesh_vertices,
+        bq=bq,
+        use_sam=use_sam,
+        use_only_diffusion=use_only_diffusion,
+        use_diffusion=use_diffusion,
+    )
+    
+    return features.cpu()
 
 def generate_colors(n):
     hues = [i / n for i in range(n)]
@@ -23,17 +72,38 @@ def generate_colors(n):
     colors = [(int(r * 255), int(g * 255), int(b * 255)) for r, g, b in colors]
     return colors
 
-
 def plot_mesh(myMesh,cmap=None):
     mp.plot(myMesh.vert, myMesh.face,c=cmap)
+
+def double_plot(myMesh1, myMesh2, cmap1=None, cmap2=None):
+    # Get vertices and faces from PyTorch3D Meshes if needed
+    if hasattr(myMesh1, 'verts_list'):
+        verts1 = myMesh1.verts_list()[0].cpu().numpy()
+        faces1 = myMesh1.faces_list()[0].cpu().numpy()
+    else:
+        verts1 = myMesh1.vert
+        faces1 = myMesh1.face
+        
+    if hasattr(myMesh2, 'verts_list'):
+        verts2 = myMesh2.verts_list()[0].cpu().numpy()
+        faces2 = myMesh2.faces_list()[0].cpu().numpy()
+    else:
+        verts2 = myMesh2.vert
+        faces2 = myMesh2.face
     
-def double_plot(myMesh1,myMesh2,cmap1=None,cmap2=None):
-    d = mp.subplot(myMesh1.vert, myMesh1.face, c=cmap1, s=[2, 2, 0])
-    mp.subplot(myMesh2.vert, myMesh2.face, c=cmap2, s=[2, 2, 1], data=d)
+    d = mp.subplot(verts1, faces1, c=cmap1, s=[2, 2, 0])
+    mp.subplot(verts2, faces2, c=cmap2, s=[2, 2, 1], data=d)
 
 def get_colors(vertices):
-    min_coord,max_coord = np.min(vertices,axis=0,keepdims=True),np.max(vertices,axis=0,keepdims=True)
-    cmap = (vertices-min_coord)/(max_coord-min_coord)
+    """Get colors for vertices using their normalized positions as RGB values"""
+    # If vertices is a Meshes object, get the vertices tensor and convert to numpy
+    if hasattr(vertices, 'verts_list'):
+        vertices = vertices.verts_list()[0].cpu().numpy()
+    elif torch.is_tensor(vertices):
+        vertices = vertices.cpu().numpy()
+    
+    min_coord, max_coord = np.min(vertices, axis=0, keepdims=True), np.max(vertices, axis=0, keepdims=True)
+    cmap = (vertices - min_coord)/(max_coord - min_coord)
     return cmap
 
 
