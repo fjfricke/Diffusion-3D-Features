@@ -111,28 +111,33 @@ def evaluate_correspondence(source_gt, target_gt, predicted_mapping, source_vert
     # Compute metrics
     avg_error, accuracy, distances, scale = compute_metrics(predicted_coords, target_coords)
     
-    # These prints are always shown (not debug)
-    print("\nEvaluation Results:")
-    print(f"Number of points evaluated: {len(common_points)}")
-    print(f"Scale (d): {scale:.6f}")
-    print(f"Average correspondence error (err): {avg_error:.6f}")
-    print(f"Correspondence accuracy (acc, γ=1%): {accuracy:.6f}")
+    if debug:
+        print("\nEvaluation Results:")
+        print(f"Number of points evaluated: {len(common_points)}")
+        print(f"Scale (d): {scale:.6f}")
+        print(f"Average correspondence error (err): {avg_error:.6f}")
+        print(f"Correspondence accuracy (acc, γ=1%): {accuracy:.6f}")
     
     return avg_error, accuracy, distances
 
-def main():
-    debug = True  # Add debug flag
+def evaluate_meshes(source_file_path, target_file_path, source_gt_path, target_gt_path, mapping_path, debug=False):
+    """
+    Evaluate correspondence between two meshes using ground truth data.
     
-    # Paths
-    source_file_path = "shrec20_dataset/SHREC20b_lores/models/cow.obj"
-    target_file_path = "shrec20_dataset/SHREC20b_lores/models/camel_a.obj"
-    cow_gt_path = 'shrec20_dataset/SHREC20b_lores_gts/cow.mat'
-    camel_gt_path = 'shrec20_dataset/SHREC20b_lores_gts/camel_a.mat'
-    mapping_path = 'predicted_mapping.npy'  # Path to saved mapping from test.ipynb
-    
+    Args:
+        source_file_path (str): Path to source mesh obj file
+        target_file_path (str): Path to target mesh obj file
+        source_gt_path (str): Path to source ground truth mat file
+        target_gt_path (str): Path to target ground truth mat file
+        mapping_path (str): Path to predicted mapping npy file
+        debug (bool): Whether to print debug information
+        
+    Returns:
+        tuple: (average_error, accuracy, distances)
+    """
     # Load ground truth data
-    source_gt = load_gt_data(cow_gt_path, debug)
-    target_gt = load_gt_data(camel_gt_path, debug)
+    source_gt = load_gt_data(source_gt_path, debug)
+    target_gt = load_gt_data(target_gt_path, debug)
     
     # Load predicted mapping
     predicted_mapping = np.load(mapping_path)
@@ -146,6 +151,7 @@ def main():
         print("\nMesh info:")
         print(f"Source - Vertices: {len(source_mesh.vert)}, Faces: {len(source_mesh.face)}")
         print(f"Target - Vertices: {len(target_mesh.vert)}, Faces: {len(target_mesh.face)}")
+    
     source_vertices = np.array(source_mesh.vert)
     target_vertices = np.array(target_mesh.vert)
     if debug:
@@ -153,7 +159,20 @@ def main():
         print(f"Target vertices shape: {target_vertices.shape}")
     
     # Evaluate correspondence
-    evaluate_correspondence(source_gt, target_gt, predicted_mapping, source_vertices, target_vertices, debug)
+    return evaluate_correspondence(source_gt, target_gt, predicted_mapping, source_vertices, target_vertices, debug)
+
+def main():
+    debug = True
+    
+    # Paths
+    source_file_path = "shrec20_dataset/SHREC20b_lores/models/cow.obj"
+    target_file_path = "shrec20_dataset/SHREC20b_lores/models/camel_a.obj"
+    cow_gt_path = 'shrec20_dataset/SHREC20b_lores_gts/cow.mat'
+    camel_gt_path = 'shrec20_dataset/SHREC20b_lores_gts/camel_a.mat'
+    mapping_path = 'predicted_mapping.npy'  # Path to saved mapping from test.ipynb
+    
+    # Call the evaluation function
+    evaluate_meshes(source_file_path, target_file_path, cow_gt_path, camel_gt_path, mapping_path, debug)
 
 if __name__ == "__main__":
     main()
