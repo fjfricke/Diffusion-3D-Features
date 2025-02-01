@@ -1,0 +1,10 @@
+camel_b,camel_a
+hippo,rhino
+bear,cow
+camel_b,cow
+bear,leopard
+bear,dog
+hippo,cow
+hippo,dog
+bear,giraffe_a
+camel_b,elephant_a

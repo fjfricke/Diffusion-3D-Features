@@ -1,0 +1,5 @@
+rhino,elephant_a
+cow,elephant_a
+elephant_a,giraffe_a
+cow,giraffe_b
+dog,giraffe_a

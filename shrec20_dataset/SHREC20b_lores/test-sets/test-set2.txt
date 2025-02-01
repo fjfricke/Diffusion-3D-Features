@@ -1,0 +1,5 @@
+dog,leopard
+pig,leopard
+leopard,cow
+dog,pig
+cow,dog

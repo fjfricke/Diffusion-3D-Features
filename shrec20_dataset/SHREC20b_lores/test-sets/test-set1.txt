@@ -1,0 +1,5 @@
+giraffe_a,giraffe_b
+elephant_a,elephant_b
+camel_a,giraffe_a
+giraffe_b,camel_a
+cow,bison

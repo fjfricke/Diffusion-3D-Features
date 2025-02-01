@@ -1,0 +1,5 @@
+camel_a,cow
+dog,camel_a
+rhino,cow
+pig,elephant_a
+bison,elephant_b
