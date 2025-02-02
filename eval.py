@@ -111,12 +111,15 @@ def evaluate_correspondence(source_gt, target_gt, predicted_mapping, source_vert
     # Compute metrics
     avg_error, accuracy, distances, scale = compute_metrics(predicted_coords, target_coords)
     
+    avg_error = f"{avg_error:.2f}".replace(".", ",")  
+    accuracy = f"{accuracy * 100:.2f}".replace(".", ",")
+
     if debug:
         print("\nEvaluation Results:")
         print(f"Number of points evaluated: {len(common_points)}")
         print(f"Scale (d): {scale:.6f}")
-        print(f"Average correspondence error (err): {avg_error:.6f}")
-        print(f"Correspondence accuracy (acc, γ=1%): {accuracy:.6f}")
+        print(f"Average correspondence error (err): {avg_error}")
+        print(f"Correspondence accuracy (acc, γ=1%): {accuracy}%")
     
     return avg_error, accuracy, distances
 
@@ -165,10 +168,10 @@ def main():
     debug = True
     
     # Paths
-    source_file_path = "shrec20_dataset/SHREC20b_lores/models/cow.obj"
-    target_file_path = "shrec20_dataset/SHREC20b_lores/models/camel_a.obj"
-    cow_gt_path = 'shrec20_dataset/SHREC20b_lores_gts/cow.mat'
-    camel_gt_path = 'shrec20_dataset/SHREC20b_lores_gts/camel_a.mat'
+    source_file_path = "data/SHREC20b_lores/models/cow.obj"
+    target_file_path = "data/SHREC20b_lores/models/camel_a.obj"
+    cow_gt_path = 'data/SHREC20b_lores_gts/cow.mat'
+    camel_gt_path = 'data/SHREC20b_lores_gts/camel_a.mat'
     mapping_path = 'predicted_mapping.npy'  # Path to saved mapping from test.ipynb
     
     # Call the evaluation function

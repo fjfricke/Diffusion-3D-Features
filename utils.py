@@ -102,9 +102,12 @@ def double_plot(myMesh1, myMesh2, cmap1=None, cmap2=None):
 def get_colors(vertices):
     """Get colors for vertices using their normalized positions as RGB values"""
     # If vertices is a Meshes object, get the vertices tensor and convert to numpy
-    if hasattr(vertices, 'verts_list'):
-        vertices = vertices.verts_list()[0].cpu().numpy()
-    elif torch.is_tensor(vertices):
+    if isinstance(vertices, MeshContainer):
+        vertices = vertices.vert  # Using the correct 'vert' attribute
+    elif hasattr(vertices, 'verts_list'):
+        vertices = vertices.verts_list()[0]
+    
+    if torch.is_tensor(vertices):
         vertices = vertices.cpu().numpy()
     
     min_coord, max_coord = np.min(vertices, axis=0, keepdims=True), np.max(vertices, axis=0, keepdims=True)

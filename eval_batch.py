@@ -147,8 +147,12 @@ def run_batch_evaluation(
 
         # Print results for this pair
         if result["status"] == "success":
-            print(f"Average correspondence error (err): {result['avg_error']:.6f}")
-            print(f"Correspondence accuracy (acc, γ=1%): {result['accuracy']:.6f}")
+            avg_error = f"{result['avg_error']:.2f}".replace(".", ",")  # Format error with two decimals, use comma
+            accuracy = f"{result['accuracy'] * 100:.2f}".replace(".", ",")  # Convert to percentage and use comma
+
+            print(f"Average correspondence error (err): {avg_error}")
+            print(f"Correspondence accuracy (acc, γ=1%): {accuracy}%")
+
         else:
             print(f"Failed to process pair: {result['error']}")
 
@@ -183,3 +187,67 @@ def save_results(results):
         print(
             f"Successfully processed {len(successful_results)} out of {len(results)} pairs"
         )
+
+if __name__ == "__main__":
+    import torch
+    import time
+
+
+    start_time = time.time()  # Start timing
+
+    if torch.backends.mps.is_available():
+        device = torch.device("mps")
+        print("Using MPS")
+    elif torch.cuda.is_available():
+        device = torch.device("cuda:0")
+        print("Using GPU")
+    else:
+        device = torch.device("cpu")
+        print("No GPU/MPS available, falling back to CPU.")
+
+    from diffusion import init_pipe
+    from utils import cosine_similarity, double_plot, get_colors
+    from dino import init_dino
+    from sam2_setup import init_sam2
+    from utils import compute_features, load_mesh
+    import numpy as np
+    num_views = 50
+    H = 512
+    W = 512
+    tolerance = 0.004
+    use_normal_map = True
+    num_images_per_prompt = 1
+    bq = True
+    use_sam = False
+    use_only_diffusion = False
+    use_diffusion = True
+    is_tosca = False
+
+    save_path=None # if not None, save batched_renderings, normal_batched_renderings, camera, depth to 'rendered_mesh_output.pt'
+   
+    sam_model = None
+    pipe = init_pipe(device)
+    dino_model = init_dino(device)
+
+
+    results = run_batch_evaluation(
+        pairs_file='data/SHREC20b_lores/test-sets/test-set1.txt',
+        base_path="data/SHREC20b_lores",
+        device=device,
+        sam_model=sam_model,
+        dino_model=dino_model,
+        pipe=pipe,
+        num_views=num_views,
+        H=H,
+        W=W,
+        tolerance=tolerance
+    )
+
+
+    end_time = time.time()
+    elapsed_time = end_time - start_time 
+
+    # Format the output
+    hours, rem = divmod(elapsed_time, 3600)
+    minutes, seconds = divmod(rem, 60)
+    print(f"Total Execution Time: {int(hours)}h {int(minutes)}m {seconds:.2f}s")
