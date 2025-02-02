@@ -14,6 +14,9 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import colorsys
 from diff3f import get_features_per_vertex
+from pytorch3d.io import load_objs_as_meshes
+from dataloaders.mesh_container import MeshContainer
+
 
 def compute_features(
     device,
@@ -239,3 +242,19 @@ def gmm(a, b):
     correspondence_matrix = torch.norm(gram_matrix_a - gram_matrix_b, p='fro', dim=2)
 
     return correspondence_matrix
+
+def load_mesh(file_path, device):
+    """Load mesh, using the correct loader based on texture presence."""
+    print(f"Loading mesh from {file_path}")
+
+    # Check if the OBJ file contains texture references
+    with open(file_path, "r") as f:
+        contains_texture = any(line.startswith(("mtllib", "usemtl")) for line in f)
+
+    if contains_texture:
+        print("Detected texture references. Using load_objs_as_meshes.")
+        return load_objs_as_meshes([file_path], device=device)
+    else:
+        print("No texture detected. Using MeshContainer.")
+        return MeshContainer().load_from_file(file_path)
+

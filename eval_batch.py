@@ -5,8 +5,7 @@ from dataloaders.mesh_container import MeshContainer
 from eval import evaluate_meshes
 from pytorch3d.io import load_objs_as_meshes
 
-from utils import compute_features, cosine_similarity
-
+from utils import compute_features, cosine_similarity, load_mesh
 
 
 def read_pairs(pairs_file):
@@ -14,7 +13,6 @@ def read_pairs(pairs_file):
     with open(pairs_file, "r") as f:
         pairs = [line.strip().split(",") for line in f if line.strip()]
     return pairs
-
 
 def process_pair(
     source_name,
@@ -40,13 +38,18 @@ def process_pair(
     target_gt_path = str(gts_path / f"{target_name}.mat")
 
     try:
+        # Construct file paths
+        models_path = Path(base_path) / "models"
+        gts_path = Path(base_path + "_gts")
+
+        source_file_path = str(models_path / f"{source_name}.obj")
+        target_file_path = str(models_path / f"{target_name}.obj")
+        source_gt_path = str(gts_path / f"{source_name}.mat")
+        target_gt_path = str(gts_path / f"{target_name}.mat")
+
         # Load meshes
-        try:
-            source_mesh = MeshContainer().load_from_file(source_file_path)
-            target_mesh = MeshContainer().load_from_file(target_file_path)
-        except NameError:
-            source_mesh = load_objs_as_meshes([source_file_path], device=device)
-            target_mesh = load_objs_as_meshes([target_file_path], device=device)
+        source_mesh = load_mesh(source_file_path, device)
+        target_mesh = load_mesh(target_file_path, device)
 
         # Compute features
         f_source = compute_features(
@@ -75,7 +78,7 @@ def process_pair(
         )
 
         # Compute similarity and save mapping
-        s = cosine_similarity(f_source.to(device), f_target.to(device))
+        s = cosine_similarity(f_target.to(device),f_source.to(device))        
         s = torch.argmax(s, dim=0).cpu().numpy()
         mapping_path = f"mappings/{source_name}_{target_name}_mapping.npy"
         Path("mappings").mkdir(exist_ok=True)
