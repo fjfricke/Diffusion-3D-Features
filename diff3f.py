@@ -81,6 +81,7 @@ def get_features_per_vertex(
     use_sam=False,
     use_only_diffusion=False,
     use_diffusion=True,
+    save_path=None
 ):
     """Main function to extract and map features to mesh vertices."""
     t1 = time()
@@ -99,6 +100,16 @@ def get_features_per_vertex(
     # Initialize video generator and get renders
     video_gen = MeshVideoGenerator(hw=H, num_views=num_views, device=device)
     batched_renderings, normal_batched_renderings, camera, depth = video_gen.render_mesh_with_depth(mesh)
+    
+    if save_path:
+        # Save the rendered outputs
+        torch.save({
+            'renderings': batched_renderings,
+            'normal_renderings': normal_batched_renderings,
+            'camera': camera,
+            'depth': depth
+        }, save_path)
+        print(f"Rendered mesh saved to {save_path}")
    
     if use_normal_map:
         normal_batched_renderings = normal_batched_renderings.cpu()

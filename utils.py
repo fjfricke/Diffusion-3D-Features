@@ -26,6 +26,7 @@ def compute_features(
     H,
     W,
     tolerance,
+    save_path,
     use_normal_map=True,
     num_images_per_prompt=1,
     bq=True,
@@ -60,6 +61,7 @@ def compute_features(
         use_sam=use_sam,
         use_only_diffusion=use_only_diffusion,
         use_diffusion=use_diffusion,
+        save_path=save_path
     )
     
     return features.cpu()
