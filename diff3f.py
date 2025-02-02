@@ -9,6 +9,7 @@ from mesh_video_generator import MeshVideoGenerator
 from tqdm import tqdm
 from time import time
 import random
+import os
 
 
 FEATURE_DIMS_DIFFUSION = 1280

@@ -111,15 +111,15 @@ def evaluate_correspondence(source_gt, target_gt, predicted_mapping, source_vert
     # Compute metrics
     avg_error, accuracy, distances, scale = compute_metrics(predicted_coords, target_coords)
     
-    avg_error = f"{avg_error:.2f}".replace(".", ",")  
-    accuracy = f"{accuracy * 100:.2f}".replace(".", ",")
+    avg_error_display = f"{avg_error:.2f}".replace(".", ",")  
+    accuracy_display = f"{accuracy * 100:.2f}".replace(".", ",")
 
     if debug:
         print("\nEvaluation Results:")
         print(f"Number of points evaluated: {len(common_points)}")
         print(f"Scale (d): {scale:.6f}")
-        print(f"Average correspondence error (err): {avg_error}")
-        print(f"Correspondence accuracy (acc, γ=1%): {accuracy}%")
+        print(f"Average correspondence error (err): {avg_error_display}")
+        print(f"Correspondence accuracy (acc, γ=1%): {accuracy_display}%")
     
     return avg_error, accuracy, distances
 

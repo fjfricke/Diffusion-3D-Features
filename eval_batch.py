@@ -4,7 +4,7 @@ from pathlib import Path
 from dataloaders.mesh_container import MeshContainer
 from eval import evaluate_meshes
 from pytorch3d.io import load_objs_as_meshes
-
+import os
 from utils import compute_features, cosine_similarity, load_mesh
 
 
@@ -147,12 +147,10 @@ def run_batch_evaluation(
 
         # Print results for this pair
         if result["status"] == "success":
-            avg_error = f"{result['avg_error']:.2f}".replace(".", ",")  # Format error with two decimals, use comma
-            accuracy = f"{result['accuracy'] * 100:.2f}".replace(".", ",")  # Convert to percentage and use comma
-
-            print(f"Average correspondence error (err): {avg_error}")
-            print(f"Correspondence accuracy (acc, γ=1%): {accuracy}%")
-
+            avg_error_display = f"{result['avg_error']:.2f}".replace(".", ",")  
+            accuracy_display = f"{result['accuracy'] * 100:.2f}".replace(".", ",")
+            print(f"Average correspondence error (err): {avg_error_display}")
+            print(f"Correspondence accuracy (acc, γ=1%): {accuracy_display}%")
         else:
             print(f"Failed to process pair: {result['error']}")
 
@@ -178,15 +176,9 @@ def save_results(results):
     successful_results = df[df["status"] == "success"]
     if not successful_results.empty:
         print("\nSummary Statistics:")
-        print(
-            f"Average error across all pairs: {successful_results['avg_error'].mean():.6f}"
-        )
-        print(
-            f"Average accuracy across all pairs: {successful_results['accuracy'].mean():.6f}"
-        )
-        print(
-            f"Successfully processed {len(successful_results)} out of {len(results)} pairs"
-        )
+        print(f"Average error across all pairs: {successful_results['avg_error'].mean()* 100:.2f}")
+        print(f"Average accuracy across all pairs: {successful_results['accuracy'].mean():.2f}")
+        print(f"Successfully processed {len(successful_results)} out of {len(results)} pairs")
 
 if __name__ == "__main__":
     import torch
@@ -211,7 +203,7 @@ if __name__ == "__main__":
     from sam2_setup import init_sam2
     from utils import compute_features, load_mesh
     import numpy as np
-    num_views = 50
+    num_views = 1
     H = 512
     W = 512
     tolerance = 0.004
@@ -231,7 +223,7 @@ if __name__ == "__main__":
 
 
     results = run_batch_evaluation(
-        pairs_file='data/SHREC20b_lores/test-sets/test-set1.txt',
+        pairs_file='data/SHREC20b_lores/test-sets/test-set2.txt',
         base_path="data/SHREC20b_lores",
         device=device,
         sam_model=sam_model,

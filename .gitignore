@@ -6,6 +6,7 @@ data/
 *.zip
 *.csv
 *.mp4
+video/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
