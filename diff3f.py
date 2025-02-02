@@ -110,6 +110,8 @@ def get_features_per_vertex(
             'depth': depth
         }, save_path)
         print(f"Rendered mesh saved to {save_path}")
+    if save_path:
+        return None
    
     if use_normal_map:
         normal_batched_renderings = normal_batched_renderings.cpu()
