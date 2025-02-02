@@ -26,7 +26,7 @@ def compute_features(
     H,
     W,
     tolerance,
-    save_path,
+    save_path=None,
     use_normal_map=True,
     num_images_per_prompt=1,
     bq=True,
