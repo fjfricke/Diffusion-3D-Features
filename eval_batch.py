@@ -22,60 +22,54 @@ def process_pair(
     sam_model,
     dino_model,
     pipe,
+    mesh_input,
+    prompt,
     num_views,
     H,
     W,
     tolerance,
+    save_path=None,
+    use_normal_map=True,
+    tex=False,
+    tex_mesh=None,
+    num_images_per_prompt=1,
+    bq=True,
+    use_sam=False,
+    use_only_diffusion=False,
+    use_diffusion=True,
+    is_tosca=False,
 ):
     """Process a single pair of meshes."""
-    # Construct file paths
-    models_path = Path(base_path) / "models"
-    gts_path = Path(base_path + "_gts")
-
-    source_file_path = str(models_path / f"{source_name}.obj")
-    target_file_path = str(models_path / f"{target_name}.obj")
-    source_gt_path = str(gts_path / f"{source_name}.mat")
-    target_gt_path = str(gts_path / f"{target_name}.mat")
-
     try:
         # Construct file paths
         models_path = Path(base_path) / "models"
         gts_path = Path(base_path + "_gts")
+        tex_path = Path(base_path + "_tex")  # New path for textured models
 
         source_file_path = str(models_path / f"{source_name}.obj")
         target_file_path = str(models_path / f"{target_name}.obj")
         source_gt_path = str(gts_path / f"{source_name}.mat")
         target_gt_path = str(gts_path / f"{target_name}.mat")
 
+        # Add paths for textured meshes
+        source_tex_file_path = str(tex_path / f"{source_name}_tex" / f"{source_name}_tex.obj")
+        target_tex_file_path = str(tex_path / f"{target_name}_tex" / f"{target_name}_tex.obj")
+
         # Load meshes
         source_mesh = load_mesh(source_file_path, device)
         target_mesh = load_mesh(target_file_path, device)
 
-        # Compute features
-        f_source = compute_features(
-            device,
-            sam_model,
-            dino_model,
-            pipe,
-            source_mesh,
-            source_name,
-            num_views,
-            H,
-            W,
-            tolerance,
-        )
-        f_target = compute_features(
-            device,
-            sam_model,
-            dino_model,
-            pipe,
-            target_mesh,
-            target_name,
-            num_views,
-            H,
-            W,
-            tolerance,
-        )
+        # Load textured meshes if tex is True
+        source_tex_mesh = load_mesh(source_tex_file_path, device) if tex else None
+        target_tex_mesh = load_mesh(target_tex_file_path, device) if tex else None
+
+        f_source = compute_features(device, sam_model, dino_model, pipe, source_mesh, source_name, num_views, H, W, tolerance, 
+                        save_path, use_normal_map, tex, source_tex_mesh, num_images_per_prompt, bq, 
+                        use_sam, use_only_diffusion, use_diffusion, is_tosca)
+        
+        f_target = compute_features(device, sam_model, dino_model, pipe, target_mesh, target_name, num_views, H, W, tolerance, 
+                        save_path, use_normal_map, tex, target_tex_mesh, num_images_per_prompt, bq, 
+                        use_sam, use_only_diffusion, use_diffusion, is_tosca)
 
         # Compute similarity and save mapping
         s = cosine_similarity(f_target.to(device),f_source.to(device))        
@@ -111,15 +105,27 @@ def process_pair(
 
 def run_batch_evaluation(
     pairs_file,
-    base_path="data/SHREC20b_lores",
-    device="cuda",
-    sam_model=None,
-    dino_model=None,
-    pipe=None,
-    num_views=8,
-    H=224,
-    W=224,
-    tolerance=0.2,
+    base_path,
+    device,
+    sam_model,
+    dino_model,
+    pipe,
+    source_mesh,
+    source_prompt,
+    num_views,
+    H,
+    W,
+    tolerance,
+    save_path,
+    use_normal_map,
+    tex,
+    source_tex_mesh,
+    num_images_per_prompt,
+    bq,
+    use_sam,
+    use_only_diffusion,
+    use_diffusion,
+    is_tosca
 ):
     """Run evaluation on all pairs in the dataset."""
     # Read pairs
@@ -138,10 +144,22 @@ def run_batch_evaluation(
             sam_model,
             dino_model,
             pipe,
+            source_mesh,
+            source_prompt,
             num_views,
             H,
             W,
             tolerance,
+            save_path,
+            use_normal_map,
+            tex,
+            source_tex_mesh,
+            num_images_per_prompt,
+            bq,
+            use_sam,
+            use_only_diffusion,
+            use_diffusion,
+            is_tosca
         )
         results.append(result)
 
@@ -203,20 +221,8 @@ if __name__ == "__main__":
     from sam2_setup import init_sam2
     from utils import compute_features, load_mesh
     import numpy as np
-    num_views = 1
-    H = 512
-    W = 512
-    tolerance = 0.004
-    use_normal_map = True
-    num_images_per_prompt = 1
-    bq = True
-    use_sam = False
-    use_only_diffusion = False
-    use_diffusion = True
-    is_tosca = False
 
-    save_path=None # if not None, save batched_renderings, normal_batched_renderings, camera, depth to 'rendered_mesh_output.pt'
-   
+     
     sam_model = None
     pipe = init_pipe(device)
     dino_model = init_dino(device)
@@ -229,10 +235,22 @@ if __name__ == "__main__":
         sam_model=sam_model,
         dino_model=dino_model,
         pipe=pipe,
-        num_views=num_views,
-        H=H,
-        W=W,
-        tolerance=tolerance
+        source_mesh=None,
+        source_prompt="a 3D model of a cow",
+        num_views=1,
+        H=512,
+        W=512,
+        tolerance=0.004,
+        save_path=None,
+        use_normal_map=True,
+        tex=True,
+        source_tex_mesh=None,
+        num_images_per_prompt=1,
+        bq=True,
+        use_sam=False,
+        use_only_diffusion=False,
+        use_diffusion=True,
+        is_tosca=False
     )
 
 
