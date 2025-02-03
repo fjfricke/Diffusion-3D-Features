@@ -18,6 +18,7 @@ from pytorch3d.io import load_objs_as_meshes
 from dataloaders.mesh_container import MeshContainer
 import os
 
+
 def compute_features(
     device,
     sam_model,
@@ -36,11 +37,17 @@ def compute_features(
     use_sam=False,
     use_only_diffusion=False,
     use_diffusion=True,
-    is_tosca=False
+    is_tosca=False,
+    tex=False,
+    tex_mesh=None
 ):
     # Convert to PyTorch3D mesh if needed
     mesh = (mesh_input if hasattr(mesh_input, 'verts_list') 
             else convert_mesh_container_to_torch_mesh(mesh_input, device=device, is_tosca=is_tosca))
+    
+    if tex:
+        tex_mesh = (tex_mesh if hasattr(tex_mesh, 'verts_list') 
+                else convert_mesh_container_to_torch_mesh(tex_mesh, device=device, is_tosca=is_tosca))
     
     # Get mesh vertices
     mesh_vertices = mesh.verts_list()[0]
@@ -64,7 +71,9 @@ def compute_features(
         use_sam=use_sam,
         use_only_diffusion=use_only_diffusion,
         use_diffusion=use_diffusion,
-        save_path=save_path
+        save_path=save_path,
+        tex=tex,
+        tex_mesh=tex_mesh
     )
     
     return features.cpu()
@@ -136,7 +145,6 @@ def double_plot(myMesh1, myMesh2, cmap1=None, cmap2=None, save_path='plot.html',
         d = mp.subplot(verts1, faces1, c=cmap1, s=[2, 2, 0])
         mp.subplot(verts2, faces2, c=cmap2, s=[2, 2, 1], data=d)
     
-
 def get_colors(vertices):
     """Get colors for vertices using their normalized positions as RGB values"""
     # If vertices is a Meshes object, get the vertices tensor and convert to numpy
@@ -152,7 +160,6 @@ def get_colors(vertices):
     cmap = (vertices - min_coord)/(max_coord - min_coord)
     return cmap
 
-
 def str2bool(v):
     if isinstance(v, bool):
         return v
@@ -162,7 +169,6 @@ def str2bool(v):
         return False
     else:
         raise argparse.ArgumentTypeError("Boolean value expected.")
-
 
 def to_numpy(tensor):
     """Wrapper around .detach().cpu().numpy()"""
@@ -175,7 +181,6 @@ def to_numpy(tensor):
     else:
         raise NotImplementedError
 
-
 def to_tensor(ndarray):
     if isinstance(ndarray, torch.Tensor):
         return ndarray
@@ -185,7 +190,6 @@ def to_tensor(ndarray):
         return torch.tensor(ndarray)
     else:
         raise NotImplementedError
-
 
 def convert_trimesh_to_torch_mesh(tm, device, is_tosca=True):
     verts_1, faces_1 = torch.tensor(tm.vertices, dtype=torch.float32), torch.tensor(
@@ -238,7 +242,6 @@ def cosine_similarity(a, b):
 
     return similarity
 
-
 def cosine_similarity_batch(a, b, batch_size=30000):
     num_a, dim_a = a.size()
     num_b, dim_b = b.size()
@@ -254,7 +257,6 @@ def cosine_similarity_batch(a, b, batch_size=30000):
             similarity_matrix[i:i+batch_size, j:j+batch_size] = similarity_batch.cpu()
     return similarity_matrix
 
-
 def hungarian_correspondence(similarity_matrix):
     # Convert similarity matrix to a cost matrix by negating the similarity values
     cost_matrix = -similarity_matrix.cpu().numpy()
@@ -268,7 +270,6 @@ def hungarian_correspondence(similarity_matrix):
     match_matrix[row_indices, col_indices] = 1
     match_matrix = torch.from_numpy(match_matrix).cuda()
     return match_matrix
-
 
 def gmm(a, b):
     # Compute Gram matrices

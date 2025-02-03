@@ -82,7 +82,9 @@ def get_features_per_vertex(
     use_sam=False,
     use_only_diffusion=False,
     use_diffusion=True,
-    save_path=None
+    save_path=None,
+    tex=False,
+    tex_mesh=None
 ):
     """Main function to extract and map features to mesh vertices."""
     t1 = time()
@@ -101,6 +103,8 @@ def get_features_per_vertex(
     # Initialize video generator and get renders
     video_gen = MeshVideoGenerator(hw=H, num_views=num_views, device=device)
     batched_renderings, normal_batched_renderings, camera, depth = video_gen.render_mesh_with_depth(mesh)
+    if tex:
+        batched_renderings_tex, normal_batched_renderings_tex, camera_tex, depth_tex = video_gen.render_mesh_with_depth(tex_mesh)
     
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -116,10 +120,10 @@ def get_features_per_vertex(
     if use_normal_map:
         normal_batched_renderings = normal_batched_renderings.cpu()
     batched_renderings = batched_renderings.cpu()
-
-    os.makedirs("data/video", exist_ok=True)  
-    video_gen.save_video(batched_renderings, f"data/video/{prompt}.mp4", fps=30, display_frames=False)
+    
     if save_path:
+        os.makedirs("data/video", exist_ok=True)  
+        video_gen.save_video(batched_renderings, f"data/video/{prompt}.mp4", fps=30, display_frames=False)
         return torch.tensor([])
     
     # Setup pixel coordinates and grid
@@ -171,46 +175,50 @@ def get_features_per_vertex(
         if prompts_list is not None:
             prompt = random.choice(prompts_list)
 
+        if use_diffusion or use_only_diffusion:
+            diffusion_output = add_texture_to_render(
+                pipe,
+                diffusion_input_img,
+                depth_map,
+                prompt,
+                normal_map_input=normal_map_input,
+                use_latent=use_latent,
+                num_images_per_prompt=num_images_per_prompt,
+                return_image=return_image
+            )
 
-        diffusion_output = add_texture_to_render(
-            pipe,
-            diffusion_input_img,
-            depth_map,
-            prompt,
-            normal_map_input=normal_map_input,
-            use_latent=use_latent,
-            num_images_per_prompt=num_images_per_prompt,
-            return_image=return_image
-        )
 
-
-        ### TODO
         if not use_only_diffusion:
             if not use_sam:
-                aligned_dino_features = get_dino_features(device, dino_model, diffusion_output[1][0], grid)
+                if tex:
+                    aligned_dino_features = get_dino_features(device, dino_model, batched_renderings_tex[idx], grid)
+                else:
+                    aligned_dino_features = get_dino_features(device, dino_model, diffusion_output[1][0], grid)
             else:
-                aligned_dino_features = get_sam_features(device, sam_model, diffusion_input_img, grid)
-        ###
+                if tex:
+                    aligned_dino_features = get_sam_features(device, sam_model, batched_renderings_tex[idx], grid)
+                else:
+                    aligned_dino_features = get_sam_features(device, sam_model, diffusion_input_img, grid)
 
-        #aligned_dino_features = get_sam_features(device, sam_model, diffusion_input_img, grid)
-
-        with torch.no_grad():
-            ft = torch.nn.Upsample(size=(H,W), mode="bilinear")(diffusion_output[0].unsqueeze(0)).to(device)
-            ft_dim = ft.size(1)
-            aligned_features = torch.nn.functional.grid_sample(
-                ft, grid, align_corners=False
-            ).reshape(1, ft_dim, -1)
-            aligned_features = torch.nn.functional.normalize(aligned_features, dim=1)
+                
+        if use_diffusion or use_only_diffusion:
+            with torch.no_grad():
+                ft = torch.nn.Upsample(size=(H,W), mode="bilinear")(diffusion_output[0].unsqueeze(0)).to(device)
+                ft_dim = ft.size(1)
+                aligned_features = torch.nn.functional.grid_sample(
+                    ft, grid, align_corners=False
+                ).reshape(1, ft_dim, -1)
+                aligned_features = torch.nn.functional.normalize(aligned_features, dim=1)
         # this is feature per pixel in the grid
-        ### TODO
+       
+       
         if not use_only_diffusion:
             if not use_diffusion:
                 aligned_features = aligned_dino_features
             else:
                 aligned_features = torch.hstack([aligned_features*0.5, aligned_dino_features*0.5])
-        ###
+
         
-        # aligned_features = aligned_dino_features
         features_per_pixel = aligned_features[0, :, indices].cpu()
 
         # map pixel to vertex on mesh
