@@ -99,7 +99,6 @@ def compute_camera_transform_fixed_azimuth(device, num_views, bbox_center, dista
     camera_positions = bbox_center.unsqueeze(0) + (camera_directions * distance)
     
     up_vectors = []
-    flip_flags = []
     
     # Calculate view directions with added stability
     view_dirs = bbox_center.unsqueeze(0) - camera_positions
@@ -113,12 +112,11 @@ def compute_camera_transform_fixed_azimuth(device, num_views, bbox_center, dista
         if abs(current_elevation - 90) < 1 or abs(current_elevation - 270) < 1:
             current_elevation += epsilon
             
+        # Determine the up vector based on the elevation
         if current_elevation < 90 or current_elevation >= 270:
             up = torch.tensor([0., 1., 0.], device=device)
-            flip_flags.append(False)
         else:
-            up = torch.tensor([0., 1., 0.], device=device)
-            flip_flags.append(True)
+            up = torch.tensor([0., -1., 0.], device=device)  # Invert the up vector
         
         # Add stability to cross products
         right = torch.cross(view_dir, up, dim=0)
@@ -141,8 +139,7 @@ def compute_camera_transform_fixed_azimuth(device, num_views, bbox_center, dista
         device=device
     )
     
-    return rotation, translation, camera_positions, flip_flags
-
+    return rotation, translation, camera_positions
 
 @torch.no_grad()
 def run_rendering(device, mesh, num_views, H, W, use_normal_map=False, fixed_angle=None):
@@ -153,9 +150,8 @@ def run_rendering(device, mesh, num_views, H, W, use_normal_map=False, fixed_ang
             device, num_views, bbox_center, distance, fixed_angle
         )
         camera_positions = None
-        flip_flags = None
     elif fixed_angle and fixed_angle['type'] == 'azimuth':
-        rotation, translation, camera_positions, flip_flags = compute_camera_transform_fixed_azimuth(
+        rotation, translation, camera_positions = compute_camera_transform_fixed_azimuth(
             device, num_views, bbox_center, distance, fixed_angle
         )
     else:
@@ -170,24 +166,11 @@ def run_rendering(device, mesh, num_views, H, W, use_normal_map=False, fixed_ang
     batch_mesh = mesh.extend(num_views)
     renderings = renderer(batch_mesh)
 
-    # Apply flipping to maintain visual consistency
-    if flip_flags is not None:
-        for i, should_flip in enumerate(flip_flags):
-            if should_flip:
-                # Flip the image vertically and horizontally
-                renderings[i] = torch.flip(torch.flip(renderings[i], [0]), [1])
-
     normal_renderings = None
     if use_normal_map:
         normal_shader = HardPhongNormalShader(device=device, cameras=camera, lights=lights)
         normal_renderer = MeshRenderer(rasterizer=rasterizer, shader=normal_shader)
         normal_renderings = normal_renderer(batch_mesh)
-        
-        # Apply same flipping to normal map
-        if flip_flags is not None:
-            for i, should_flip in enumerate(flip_flags):
-                if should_flip:
-                    normal_renderings[i] = torch.flip(torch.flip(normal_renderings[i], [0]), [1])
 
     fragments = rasterizer(batch_mesh)
     depth = fragments.zbuf
