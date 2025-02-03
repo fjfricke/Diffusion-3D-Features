@@ -80,7 +80,11 @@ def generate_colors(n):
 def plot_mesh(myMesh,cmap=None):
     mp.plot(myMesh.vert, myMesh.face,c=cmap)
 
-def double_plot(myMesh1, myMesh2, cmap1=None, cmap2=None):
+def double_plot(myMesh1, myMesh2, cmap1=None, cmap2=None, save_path='plot.html', show=False):
+    from meshplot import website, jupyter
+    import meshplot as mp
+    import os
+    
     # Get vertices and faces from PyTorch3D Meshes if needed
     if hasattr(myMesh1, 'verts_list'):
         verts1 = myMesh1.verts_list()[0].cpu().numpy()
@@ -88,16 +92,50 @@ def double_plot(myMesh1, myMesh2, cmap1=None, cmap2=None):
     else:
         verts1 = myMesh1.vert
         faces1 = myMesh1.face
-        
+
     if hasattr(myMesh2, 'verts_list'):
         verts2 = myMesh2.verts_list()[0].cpu().numpy()
         faces2 = myMesh2.faces_list()[0].cpu().numpy()
     else:
         verts2 = myMesh2.vert
         faces2 = myMesh2.face
+
+    # Create plots in website mode for saving
+    website()
     
-    d = mp.subplot(verts1, faces1, c=cmap1, s=[2, 2, 0])
-    mp.subplot(verts2, faces2, c=cmap2, s=[2, 2, 1], data=d)
+    # Create the plots separately using plot instead of subplot
+    p = mp.plot(verts1, faces1, c=cmap1, return_plot=True)
+    p1 = mp.plot(verts2, faces2, c=cmap2, return_plot=True)
+    
+    # Create the HTML content with flex container
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>Double Plot</title>
+    </head>
+    <body>
+        <div style="display: flex;">
+            <div style="width: 50%;">{p.to_html(imports=True, html_frame=False)}</div>
+            <div style="width: 50%;">{p1.to_html(imports=False, html_frame=False)}</div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    # Ensure the directory exists
+    os.makedirs('data/plots', exist_ok=True)
+    
+    full_save_path = os.path.join('data/plots', save_path)
+    with open(full_save_path, 'w') as f:
+        f.write(html_content)
+
+    if show:
+        jupyter()
+        d = mp.subplot(verts1, faces1, c=cmap1, s=[2, 2, 0])
+        mp.subplot(verts2, faces2, c=cmap2, s=[2, 2, 1], data=d)
+    
 
 def get_colors(vertices):
     """Get colors for vertices using their normalized positions as RGB values"""

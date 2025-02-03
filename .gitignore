@@ -7,6 +7,8 @@ data/
 *.csv
 *.mp4
 video/
+data/plots/
+*.html
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
