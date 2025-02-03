@@ -32,19 +32,18 @@ def compute_features(
     tolerance,
     save_path=None,
     use_normal_map=True,
+    tex=False,
+    tex_mesh=None,
     num_images_per_prompt=1,
     bq=True,
     use_sam=False,
     use_only_diffusion=False,
     use_diffusion=True,
     is_tosca=False,
-    tex=False,
-    tex_mesh=None
 ):
     # Convert to PyTorch3D mesh if needed
     mesh = (mesh_input if hasattr(mesh_input, 'verts_list') 
             else convert_mesh_container_to_torch_mesh(mesh_input, device=device, is_tosca=is_tosca))
-    
     if tex:
         tex_mesh = (tex_mesh if hasattr(tex_mesh, 'verts_list') 
                 else convert_mesh_container_to_torch_mesh(tex_mesh, device=device, is_tosca=is_tosca))

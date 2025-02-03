@@ -87,6 +87,15 @@ def get_features_per_vertex(
     tex_mesh=None
 ):
     """Main function to extract and map features to mesh vertices."""
+    print(f"prompt: {prompt}")
+    print(f"num_views: {num_views}")
+    print(f"use_latent: {use_latent}")
+    print(f"use_normal_map: {use_normal_map}")
+    print(f"use_sam: {use_sam}")
+    print(f"use_only_diffusion: {use_only_diffusion}")
+    print(f"use_diffusion: {use_diffusion}")
+    print(f"tex: {tex}")
+    
     t1 = time()
     if mesh_vertices is None:
         mesh_vertices = mesh.verts_list()[0]
@@ -103,6 +112,7 @@ def get_features_per_vertex(
     # Initialize video generator and get renders
     video_gen = MeshVideoGenerator(hw=H, num_views=num_views, device=device)
     batched_renderings, normal_batched_renderings, camera, depth = video_gen.render_mesh_with_depth(mesh)
+
     if tex:
         batched_renderings_tex, normal_batched_renderings_tex, camera_tex, depth_tex = video_gen.render_mesh_with_depth(tex_mesh)
     
@@ -187,19 +197,28 @@ def get_features_per_vertex(
                 return_image=return_image
             )
 
-
         if not use_only_diffusion:
             if not use_sam:
                 if tex:
-                    aligned_dino_features = get_dino_features(device, dino_model, batched_renderings_tex[idx], grid)
+                    tensor_img = (batched_renderings_tex[idx].cpu().numpy() * 255).astype(np.uint8)
+                    tensor_img = tensor_img[:3, :, :].transpose(1, 2, 0)
+                    pil_img = Image.fromarray(tensor_img)
+
+                    aligned_dino_features = get_dino_features(device, dino_model, pil_img, grid)
                 else:
                     aligned_dino_features = get_dino_features(device, dino_model, diffusion_output[1][0], grid)
             else:
                 if tex:
-                    aligned_dino_features = get_sam_features(device, sam_model, batched_renderings_tex[idx], grid)
+                    tensor_img = batched_renderings_tex[idx]
+                    tensor_img = tensor_img[..., :3] 
+                    tensor_img = tensor_img.cpu().numpy()  
+                    tensor_img = np.clip(tensor_img * 255.0, 0, 255).astype(np.uint8)
+                    pil_img = Image.fromarray(tensor_img)
+
+                    aligned_dino_features = get_sam_features(device, sam_model, pil_img, grid)
                 else:
                     aligned_dino_features = get_sam_features(device, sam_model, diffusion_input_img, grid)
-
+    
                 
         if use_diffusion or use_only_diffusion:
             with torch.no_grad():
@@ -209,7 +228,6 @@ def get_features_per_vertex(
                     ft, grid, align_corners=False
                 ).reshape(1, ft_dim, -1)
                 aligned_features = torch.nn.functional.normalize(aligned_features, dim=1)
-        # this is feature per pixel in the grid
        
        
         if not use_only_diffusion:
