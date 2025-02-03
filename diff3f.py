@@ -103,6 +103,7 @@ def get_features_per_vertex(
     batched_renderings, normal_batched_renderings, camera, depth = video_gen.render_mesh_with_depth(mesh)
     
     if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
         torch.save({
             'renderings': batched_renderings,
             'normal_renderings': normal_batched_renderings,
@@ -110,15 +111,16 @@ def get_features_per_vertex(
             'depth': depth
         }, save_path)
         print(f"Rendered mesh saved to {save_path}")
-    if save_path:
-        return None
+    
    
     if use_normal_map:
         normal_batched_renderings = normal_batched_renderings.cpu()
     batched_renderings = batched_renderings.cpu()
 
-    os.makedirs("video", exist_ok=True)  
-    video_gen.save_video(batched_renderings, f"video/{prompt}.mp4", fps=30, display_frames=False)
+    os.makedirs("data/video", exist_ok=True)  
+    video_gen.save_video(batched_renderings, f"data/video/{prompt}.mp4", fps=30, display_frames=False)
+    if save_path:
+        return torch.tensor([])
     
     # Setup pixel coordinates and grid
     pixel_coords = arange_pixels((H, W), invert_y_axis=True)[0]

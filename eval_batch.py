@@ -80,8 +80,8 @@ def process_pair(
         # Compute similarity and save mapping
         s = cosine_similarity(f_target.to(device),f_source.to(device))        
         s = torch.argmax(s, dim=0).cpu().numpy()
-        mapping_path = f"mappings/{source_name}_{target_name}_mapping.npy"
-        Path("mappings").mkdir(exist_ok=True)
+        mapping_path = f"data/mappings/{source_name}_{target_name}_mapping.npy"
+        Path("data/mappings").mkdir(exist_ok=True)
         np.save(mapping_path, s)
 
         # Evaluate

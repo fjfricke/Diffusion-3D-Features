@@ -16,7 +16,7 @@ import colorsys
 from diff3f import get_features_per_vertex
 from pytorch3d.io import load_objs_as_meshes
 from dataloaders.mesh_container import MeshContainer
-
+import os
 
 def compute_features(
     device,
@@ -261,3 +261,50 @@ def load_mesh(file_path, device):
         print("No texture detected. Using MeshContainer.")
         return MeshContainer().load_from_file(file_path)
 
+def process_3d_models(models_path, output_path, device, sam_model, dino_model, pipe, num_views, H, W, tolerance, is_folder_structure=False):
+    """
+    Process 3D model files and compute their features, handling both single .obj files and folder structures.
+    
+    Args:
+        models_path (str): Path to the directory containing models
+        output_path (str): Path where rendered meshes will be saved
+        device: Computing device (CPU/GPU)
+        sam_model: SAM model instance
+        dino_model: DINO model instance
+        pipe: Pipeline instance
+        num_views (int): Number of views to process
+        H (int): Height of the rendered image
+        W (int): Width of the rendered image
+        tolerance (float): Processing tolerance
+        is_folder_structure (bool): Whether the models are organized in folders (default: False)
+    """
+    def process_single_model(file_path, object_name, prompt):
+        print(f"Processing {object_name} with prompt {prompt}")
+        object_mesh = load_mesh(file_path, device)
+        save_path = os.path.join(output_path, f"{object_name}_rendered.pt")
+        compute_features(
+            device, sam_model, dino_model, pipe, 
+            object_mesh, prompt, num_views, H, W, 
+            tolerance, save_path
+        )
+
+    # Create output directory if it doesn't exist
+    os.makedirs(output_path, exist_ok=True)
+
+    if is_folder_structure:
+        # Process models organized in folders
+        for object_folder in os.listdir(models_path):
+            folder_path = os.path.join(models_path, object_folder)
+            if os.path.isdir(folder_path):
+                object_name = object_folder.split("_")[0]
+                object_file_path = os.path.join(folder_path, f"{object_folder}.obj")
+                if os.path.exists(object_file_path):
+                    process_single_model(object_file_path, object_folder, object_name)
+    else:
+        # Process individual .obj files
+        for object_file in os.listdir(models_path):
+            if object_file.endswith(".obj"):
+                object_name = object_file.split(".")[0]
+                object_file_path = os.path.join(models_path, object_file)
+                object_prompt = object_name.split("_")[0]
+                process_single_model(object_file_path, object_name, object_prompt)
