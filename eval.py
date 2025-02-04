@@ -88,8 +88,8 @@ def evaluate_correspondence(source_gt, target_gt, predicted_mapping, source_vert
         print(f"\nSource indices: {source_indices}")
         print(f"Target indices: {target_indices}")
     
-    source_gt_verts = source_gt['verts'][source_indices].flatten()
-    target_gt_verts = target_gt['verts'][target_indices].flatten()
+    source_gt_verts = source_gt['verts'][source_indices].flatten() - 1
+    target_gt_verts = target_gt['verts'][target_indices].flatten() - 1
     if debug:
         print(f"\nSource gt vertices: {source_gt_verts.shape}")
         print(f"Source gt vertices: {source_gt_verts}")
@@ -103,7 +103,7 @@ def evaluate_correspondence(source_gt, target_gt, predicted_mapping, source_vert
 
     # Get actual 3D coordinates
     predicted_coords = target_vertices[predicted_verts]
-    target_coords = target_vertices[target_gt_verts]
+    target_coords = target_gt["centroids"][target_indices]
     if debug:
         print(f"\nPredicted coords: {predicted_coords.shape}")
         print(f"Target coords: {target_coords.shape}")
@@ -113,6 +113,8 @@ def evaluate_correspondence(source_gt, target_gt, predicted_mapping, source_vert
     
     avg_error_display = f"{avg_error:.2f}".replace(".", ",")  
     accuracy_display = f"{accuracy * 100:.2f}".replace(".", ",")
+
+    print(f'Sanity check: Is this small? {(source_gt["centroids"] - source_vertices[source_gt["verts"] - 1].reshape(-1, 3)).max()}')
 
     if debug:
         print("\nEvaluation Results:")

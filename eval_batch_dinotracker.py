@@ -1,11 +1,8 @@
 import torch
 import numpy as np
 from pathlib import Path
-from dataloaders.mesh_container import MeshContainer
 from eval import evaluate_meshes
-from pytorch3d.io import load_objs_as_meshes
-import os
-from utils import compute_features, cosine_similarity, load_mesh
+from utils import compute_features_dinotracker, cosine_similarity, load_mesh
 
 
 def read_pairs(pairs_file):
@@ -15,32 +12,20 @@ def read_pairs(pairs_file):
     return pairs
 
 def process_pair(
-    source_name,
-    target_name,
-    base_path,
-    device,
-    sam_model,
-    dino_model,
-    pipe,
-    mesh_input,
-    prompt,
-    num_views,
-    H,
-    W,
-    tolerance,
-    save_path=None,
-    use_normal_map=True,
-    tex=False,
-    tex_mesh=None,
-    num_images_per_prompt=1,
-    bq=True,
-    use_sam=False,
-    use_only_diffusion=False,
-    use_diffusion=True,
-    is_tosca=False,
-    use_dinotracker=False,
-    dinotracker_path=None
-):
+        source_name,
+        target_name,
+        base_path,
+        device,
+        num_views,
+        H,
+        W,
+        tolerance,
+        use_normal_map=True,
+        bq=True,
+        is_tex=False,
+        dinotracker_path=None,
+        use_only_dino=False
+    ):
     """Process a single pair of meshes."""
     try:
         # Construct file paths
@@ -61,17 +46,23 @@ def process_pair(
         source_mesh = load_mesh(source_file_path, device)
         target_mesh = load_mesh(target_file_path, device)
 
-        # Load textured meshes if tex is True
-        source_tex_mesh = load_mesh(source_tex_file_path, device) if tex else None
-        target_tex_mesh = load_mesh(target_tex_file_path, device) if tex else None
+        if use_only_dino:
+            embedding_filename = "dino_embed_video.pt"
+        else:
+            embedding_filename = "refined_embeddings.pt"
 
-        f_source = compute_features(device, sam_model, dino_model, pipe, source_mesh, source_name, num_views, H, W, tolerance, 
-                        save_path, use_normal_map, tex, source_tex_mesh, num_images_per_prompt, bq, 
-                        use_sam, use_only_diffusion, use_diffusion, is_tosca)
+        # get dinotracker path for features
+        if not is_tex:
+            dinotracker_path_source = Path(dinotracker_path) / f"{source_name}_rendered/dino_embeddings/{embedding_filename}"
+            dinotracker_path_target = Path(dinotracker_path) / f"{target_name}_rendered/dino_embeddings/{embedding_filename}"
+        else:
+            dinotracker_path_source = Path(dinotracker_path) / f"{source_name}_tex_rendered/dino_embeddings/{embedding_filename}"
+            dinotracker_path_target = Path(dinotracker_path) / f"{target_name}_tex_rendered/dino_embeddings/{embedding_filename}"
+
+
+        f_source = compute_features_dinotracker(device, dinotracker_path_source, source_mesh, source_name, num_views, H, W, tolerance, use_normal_map, bq, is_tex)
         
-        f_target = compute_features(device, sam_model, dino_model, pipe, target_mesh, target_name, num_views, H, W, tolerance, 
-                        save_path, use_normal_map, tex, target_tex_mesh, num_images_per_prompt, bq, 
-                        use_sam, use_only_diffusion, use_diffusion, is_tosca)
+        f_target = compute_features_dinotracker(device, dinotracker_path_target, target_mesh, target_name, num_views, H, W, tolerance, use_normal_map, bq, is_tex)
 
         # Compute similarity and save mapping
         s = cosine_similarity(f_target.to(device),f_source.to(device))        
@@ -109,25 +100,15 @@ def run_batch_evaluation(
     pairs_file,
     base_path,
     device,
-    sam_model,
-    dino_model,
-    pipe,
-    source_mesh,
-    source_prompt,
     num_views,
     H,
     W,
     tolerance,
-    save_path,
     use_normal_map,
-    tex,
-    source_tex_mesh,
-    num_images_per_prompt,
     bq,
-    use_sam,
-    use_only_diffusion,
-    use_diffusion,
-    is_tosca
+    is_tex,
+    dinotracker_path,
+    use_only_dino=False
 ):
     """Run evaluation on all pairs in the dataset."""
     # Read pairs
@@ -143,25 +124,15 @@ def run_batch_evaluation(
             target_name,
             base_path,
             device,
-            sam_model,
-            dino_model,
-            pipe,
-            source_mesh,
-            source_prompt,
             num_views,
             H,
             W,
             tolerance,
-            save_path,
             use_normal_map,
-            tex,
-            source_tex_mesh,
-            num_images_per_prompt,
             bq,
-            use_sam,
-            use_only_diffusion,
-            use_diffusion,
-            is_tosca
+            is_tex,
+            dinotracker_path,
+            use_only_dino
         )
         results.append(result)
 
@@ -217,42 +188,24 @@ if __name__ == "__main__":
         device = torch.device("cpu")
         print("No GPU/MPS available, falling back to CPU.")
 
-    from diffusion import init_pipe
-    from utils import cosine_similarity, double_plot, get_colors
-    from dino import init_dino
-    from sam2_setup import init_sam2
-    from utils import compute_features, load_mesh
+    from utils import cosine_similarity
+    from utils import load_mesh
     import numpy as np
-
-     
-    sam_model = None
-    pipe = init_pipe(device)
-    dino_model = init_dino(device)
 
 
     results = run_batch_evaluation(
-        pairs_file='data/SHREC20b_lores/test-sets/test-set2.txt',
+        pairs_file='data/SHREC20b_lores/test-sets/test-set5.txt',
         base_path="data/SHREC20b_lores",
         device=device,
-        sam_model=sam_model,
-        dino_model=dino_model,
-        pipe=pipe,
-        source_mesh=None,
-        source_prompt="a 3D model of a cow",
-        num_views=1,
+        num_views=50,
         H=512,
         W=512,
         tolerance=0.004,
-        save_path=None,
         use_normal_map=True,
-        tex=True,
-        source_tex_mesh=None,
-        num_images_per_prompt=1,
         bq=True,
-        use_sam=False,
-        use_only_diffusion=False,
-        use_diffusion=True,
-        is_tosca=False
+        is_tex=True,
+        dinotracker_path="/workspace/dino-tracker/dataset",
+        use_only_dino=True
     )
 
 

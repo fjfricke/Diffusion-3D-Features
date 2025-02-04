@@ -1,3 +1,4 @@
+import gc
 import torch
 import numbers
 import numpy as np
@@ -13,7 +14,8 @@ import meshplot as mp
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import colorsys
-from diff3f import get_features_per_vertex
+# from diff3f import get_features_per_vertex
+from diff3f_dinotracker import get_features_per_vertex as get_features_per_vertex_dinotracker
 from pytorch3d.io import load_objs_as_meshes
 from dataloaders.mesh_container import MeshContainer
 import os
@@ -76,6 +78,47 @@ def compute_features(
     )
     
     return features.cpu()
+
+def compute_features_dinotracker(
+    device,
+    dinotracker_path,
+    mesh_input,
+    prompt,
+    num_views,
+    H,
+    W,
+    tolerance,
+    use_normal_map=True,
+    bq=True,
+    is_tex=False
+):
+    # Convert to PyTorch3D mesh if needed
+    mesh = (mesh_input if hasattr(mesh_input, 'verts_list') 
+            else convert_mesh_container_to_torch_mesh(mesh_input, device=device, is_tosca=False))
+    
+    # Get mesh vertices
+    mesh_vertices = mesh.verts_list()[0]
+
+    # Compute features using all available models
+    with torch.no_grad():
+        features = get_features_per_vertex_dinotracker(
+            device=device,
+            dinotracker_path=dinotracker_path,
+            mesh=mesh,
+            prompt=prompt,
+            num_views=num_views,
+            H=H,
+            W=W,
+            tolerance=tolerance,
+            use_normal_map=use_normal_map,
+            mesh_vertices=mesh_vertices,
+            bq=bq,
+            is_tex=is_tex
+        ).cpu()
+    
+    torch.cuda.empty_cache()
+    gc.collect()
+    return features
 
 def generate_colors(n):
     hues = [i / n for i in range(n)]
