@@ -150,7 +150,7 @@ def get_features_per_vertex(
 
     feature_dims = 0
     if use_diffusion:
-        feature_dims += FEATURE_DIMS_DIFFUSION
+        feature_dims += 0 #FEATURE_DIMS_DIFFUSION
     if not use_only_diffusion:
         if use_sam:
             feature_dims += FEATURE_DIMS_SAM
@@ -200,13 +200,24 @@ def get_features_per_vertex(
         if not use_only_diffusion:
             if not use_sam:
                 if tex:
-                    tensor_img = (batched_renderings_tex[idx].cpu().numpy() * 255).astype(np.uint8)
-                    tensor_img = tensor_img[:3, :, :].transpose(1, 2, 0)
-                    pil_img = Image.fromarray(tensor_img)
+                    frame_array = (batched_renderings_tex[idx].cpu().numpy() * 255).astype(np.uint8)
+                    pil_image = Image.fromarray(frame_array[..., :3])
 
-                    aligned_dino_features = get_dino_features(device, dino_model, pil_img, grid)
+                    aligned_dino_features = get_dino_features(device, dino_model, pil_image, grid)
                 else:
-                    aligned_dino_features = get_dino_features(device, dino_model, diffusion_output[1][0], grid)
+                    if use_diffusion:
+                        aligned_dino_features = get_dino_features(device, dino_model, diffusion_output[1][0], grid)
+                    else:
+                        frame_array = (batched_renderings[idx].cpu().numpy() * 255).astype(np.uint8)
+                        pil_image = Image.fromarray(frame_array[..., :3])
+
+                        aligned_dino_features = get_dino_features(device, dino_model, pil_image, grid)
+                        # tensor_img = tensor_img[:3, :, :].transpose(1, 2, 0)
+                        # pil_img = Image.fromarray(tensor_img)
+                        # # aligned_dino_features = get_dino_features(device, dino_model, pil_img, grid)
+                        # dino_feats = dino_feats_video[idx].to(device)
+                        # aligned_dino_features = torch.nn.functional.grid_sample(dino_feats, grid, align_corners=False).reshape(1, feature_dims, -1
+
             else:
                 if tex:
                     tensor_img = batched_renderings_tex[idx]
@@ -220,14 +231,14 @@ def get_features_per_vertex(
                     aligned_dino_features = get_sam_features(device, sam_model, diffusion_input_img, grid)
     
                 
-        if use_diffusion or use_only_diffusion:
-            with torch.no_grad():
-                ft = torch.nn.Upsample(size=(H,W), mode="bilinear")(diffusion_output[0].unsqueeze(0)).to(device)
-                ft_dim = ft.size(1)
-                aligned_features = torch.nn.functional.grid_sample(
-                    ft, grid, align_corners=False
-                ).reshape(1, ft_dim, -1)
-                aligned_features = torch.nn.functional.normalize(aligned_features, dim=1)
+        # if use_diffusion or use_only_diffusion:
+        #     with torch.no_grad():
+        #         ft = torch.nn.Upsample(size=(H,W), mode="bilinear")(diffusion_output[0].unsqueeze(0)).to(device)
+        #         ft_dim = ft.size(1)
+        #         aligned_features = torch.nn.functional.grid_sample(
+        #             ft, grid, align_corners=False
+        #         ).reshape(1, ft_dim, -1)
+        #         aligned_features = torch.nn.functional.normalize(aligned_features, dim=1)
        
        
         if not use_only_diffusion:

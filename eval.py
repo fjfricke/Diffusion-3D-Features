@@ -48,7 +48,7 @@ def compute_scale(vertices):
         max_dist = max(max_dist, np.max(dists))
     return max_dist
 
-def compute_metrics(predicted_points, target_points, gamma=0.1):
+def compute_metrics(predicted_points, target_points, scale, gamma=0.01):
     """
     Compute average correspondence error and accuracy.
     
@@ -64,7 +64,7 @@ def compute_metrics(predicted_points, target_points, gamma=0.1):
     avg_error = np.mean(distances)
     
     # Compute scale (d) as the maximal Euclidean distance between any two points in target
-    scale = compute_scale(target_points)
+    
     
     # Compute accuracy
     threshold = gamma * scale
@@ -88,8 +88,20 @@ def evaluate_correspondence(source_gt, target_gt, predicted_mapping, source_vert
         print(f"\nSource indices: {source_indices}")
         print(f"Target indices: {target_indices}")
     
-    source_gt_verts = source_gt['verts'][source_indices].flatten()
-    target_gt_verts = target_gt['verts'][target_indices].flatten()
+    # source_gt_coords = source_gt['centroids'][source_indices]
+    # target_gt_coords = target_gt['centroids'][target_indices]
+    # if debug:
+    #     print(f"\nSource gt coords: {source_gt_coords}")
+    #     print(f"Target gt coords: {target_gt_coords}")
+
+    source_centroids = source_gt['centroids']
+    source_coords = source_vertices[source_gt['verts'] - 1].reshape(-1, 3)
+    # print(source_centroids - source_coords)
+    print("Sanity check:")
+    print((source_centroids - source_coords).max())
+
+    source_gt_verts = source_gt['verts'][source_indices].flatten() - 1
+    target_gt_verts = target_gt['verts'][target_indices].flatten() - 1
     if debug:
         print(f"\nSource gt vertices: {source_gt_verts.shape}")
         print(f"Source gt vertices: {source_gt_verts}")
@@ -103,13 +115,14 @@ def evaluate_correspondence(source_gt, target_gt, predicted_mapping, source_vert
 
     # Get actual 3D coordinates
     predicted_coords = target_vertices[predicted_verts]
-    target_coords = target_vertices[target_gt_verts]
+    target_coords = target_gt['centroids'][target_indices]
     if debug:
         print(f"\nPredicted coords: {predicted_coords.shape}")
         print(f"Target coords: {target_coords.shape}")
     
     # Compute metrics
-    avg_error, accuracy, distances, scale = compute_metrics(predicted_coords, target_coords)
+    scale = compute_scale(target_vertices)
+    avg_error, accuracy, distances, scale = compute_metrics(predicted_coords, target_coords, scale, gamma=0.01)
     
     avg_error_display = f"{avg_error:.2f}".replace(".", ",")  
     accuracy_display = f"{accuracy * 100:.2f}".replace(".", ",")
@@ -169,9 +182,9 @@ def main():
     
     # Paths
     source_file_path = "data/SHREC20b_lores/models/cow.obj"
-    target_file_path = "data/SHREC20b_lores/models/camel_a.obj"
-    cow_gt_path = 'data/SHREC20b_lores_gts/cow.mat'
-    camel_gt_path = 'data/SHREC20b_lores_gts/camel_a.mat'
+    target_file_path = "data/SHREC20b_lores/models/hippo.obj"
+    cow_gt_path = 'data/SHREC20b_lores_gts/hippo.mat'
+    camel_gt_path = 'data/SHREC20b_lores_gts/hippo.mat'
     mapping_path = 'predicted_mapping.npy'  # Path to saved mapping from test.ipynb
     
     # Call the evaluation function

@@ -74,8 +74,8 @@ def process_pair(
         # Compute similarity and save mapping
         s = cosine_similarity(f_target.to(device),f_source.to(device))        
         s = torch.argmax(s, dim=0).cpu().numpy()
-        mapping_path = f"data/mappings/{source_name}_{target_name}_mapping.npy"
-        Path("data/mappings").mkdir(exist_ok=True)
+        mapping_path = f"data/mappings_tex/{source_name}_{target_name}_mapping.npy"
+        Path("data/mappings_tex").mkdir(exist_ok=True)
         np.save(mapping_path, s)
 
         # Evaluate
@@ -229,21 +229,21 @@ if __name__ == "__main__":
 
 
     results = run_batch_evaluation(
-        pairs_file='data/SHREC20b_lores/test-sets/test-set2.txt',
+        pairs_file='data/SHREC20b_lores/test-sets/test-set5.txt',
         base_path="data/SHREC20b_lores",
         device=device,
         sam_model=sam_model,
         dino_model=dino_model,
         pipe=pipe,
         source_mesh=None,
-        source_prompt="a 3D model of a cow",
-        num_views=1,
+        source_prompt=None,
+        num_views=50,
         H=512,
         W=512,
         tolerance=0.004,
         save_path=None,
         use_normal_map=True,
-        tex=True,
+        tex=False,
         source_tex_mesh=None,
         num_images_per_prompt=1,
         bq=True,
