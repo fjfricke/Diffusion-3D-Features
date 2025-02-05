@@ -17,6 +17,7 @@ The dataset includes:
 - Textured versions of the meshes (generated using [Text2Tex](https://github.com/daveredrum/Text2Tex))
 - Ground truth correspondence data
 - Data used for DINO tracker (both textured and untextured)
+- Results mentioned in the paper
 
 
 ## Sample Usage
